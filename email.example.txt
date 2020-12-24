@@ -1,0 +1,29 @@
+Date: 21 Dec 2020 5:1:38
+From: NVR <example@email.com>
+X-Mailer: NVR mail client.
+Reply-To: example@email.com
+X-Priority: 3 (Normal)
+To: <recipient@email.com>
+Subject: NVR alarm:FN3108XE channel:2 detected motion alarm at 2020-12-21 02:01:38 
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="__MESSAGE__ID__54yg6f6h6y456345"
+
+--__MESSAGE__ID__54yg6f6h6y456345
+Content-type: text/plain; charset=US-ASCII
+Content-Transfer-Encoding: 7bit
+
+This is a NVR alarm mail:FN3108XE channel:2 detected motion alarm at 2020-12-21 02:01:38 
+
+--__MESSAGE__ID__54yg6f6h6y456345
+Content-Type: application/x-msdownload; name="SNAP_CH02_2020_12_21_02_01_38_41861.jpg"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="SNAP_CH02_2020_12_21_02_01_38_41861.jpg"
+
+/9j/4AAQSkZJRgABAQAAAQABAAD/2wDFABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBM
+S0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXwBFRcXHhoeOyEhO3xTRlN8fHx8
+qVMONhBPvQA2jNG3HDHFLkD7qjPqaAAAn2FJ8o/2jRyepooAQkkUlOpKAEpQcZB6UUUAB4PX
+IpaQEA4PSggg88+9AAKKKKACko7UUAFLTfWlAI6mgA3dqceRgtgU3PoKM0AOyAOB+NITmjPF
+H4UAFFFGaADvzSUtJQAUhpaQ0AFJS0lABSikzx70Z9elAAaTuc0DHYUUAHY4pKWkxmgAPSik
+ooAXpRTd2OtLmgBaTPalo6GgBO1HYUUY9zQAneg9KDxyKMetAB0xx+VHHaiigD//2Q==
+
+----__MESSAGE__ID__54yg6f6h6y456345--
