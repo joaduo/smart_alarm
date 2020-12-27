@@ -1,0 +1,20 @@
+#!/bin/bash
+# smart_alarm
+# Copyright (c) 2020, Joaquin G. Duo
+# Code Licensed under LGPL License. See LICENSE file.
+
+DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/Download/qpython/scripts/}
+ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN:-123}
+
+if [[ $* == *--deploy* ]]; then
+  server_file="$(dirname "$0")"/../android_server.py
+  echo adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
+  adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
+fi
+
+echo adb forward tcp:8000 tcp:8000
+adb forward tcp:8000 tcp:8000
+echo adb shell /data/data/org.qpython.qpy/files/bin/qpython.sh /sdcard/qpython/scripts/android_server.py -l 127.0.0.1
+adb shell ANDROID_AUTH_TOKEN=$ANDROID_AUTH_TOKEN /data/data/org.qpython.qpy/files/bin/qpython.sh /sdcard/qpython/scripts/android_server.py -l 127.0.0.1
+
+
