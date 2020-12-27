@@ -1,0 +1,20 @@
+#!/bin/bash
+
+
+STATUS=$(adb shell dumpsys input_method | grep mScreenOn | awk '{print $2}' | tr -d '\r\000-\010\013\014\016-\037')
+
+if [[ $STATUS == "mScreenOn=false" ]]; then
+  #Power Key =26, Home Key=4
+  adb shell input keyevent 26 && \
+  sleep 2 && \
+  adb shell input keyevent 4 && \
+  sleep 1 && \
+  adb shell input keyevent 4 && \
+  sleep 1
+else
+  echo "Screen is on $STATUS"
+  if [[ $* == *--off* ]]; then
+    adb shell input keyevent 26 && \
+    sleep 2
+  fi
+fi

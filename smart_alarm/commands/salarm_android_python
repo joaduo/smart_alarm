@@ -7,7 +7,7 @@ DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/qpython/scripts
 QPYTHON_PATH=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin/qpython.sh}
 
 function exec_cmd(){
-    echo '$(date) Executing:'
+    echo "$(date) Executing:"
     echo "    $(printf ' %q' "$@")"
     eval $(printf ' %q' "$@")
     local ret=$?
@@ -78,6 +78,7 @@ else
         if [[ $FORCE_STOP == 1 ]];then
             exec_cmd adb shell am force-stop org.qpython.qpy
         fi
+        exec_cmd salarm_android_screen && \
         exec_cmd adb shell am start -n org.qpython.qpy/org.qpython.qpylib.MPyApi -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
         -e "com.quseit.common.extra.CONTENT_URL2" "$REMOTE_PATH $*" \
         -e "com.quseit.common.extra.CONTENT_URL0" "shortcut" \

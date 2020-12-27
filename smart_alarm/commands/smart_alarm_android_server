@@ -7,31 +7,24 @@ DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/qpython/scripts
 ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN:-123}
 QPYTHON_PATH=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin/qpython.sh}
 
-if [[ $* == *--deploy* ]]; then
-  server_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_server.py
-  echo adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
-  adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
+FORCE_COPY=${FORCE_COPY:-0}
+if [[ $* == *--foce-copy* ]]; then
+  FORCE_COPY=1
 fi
 
-
-if [[ $* == *--init* ]]; then
-    adb shell input keyevent 26 #Power Key
-    sleep 0.5
-    adb shell input keyevent 4 #Home Key (P350 bug)
-    sleep 0.5
-    adb shell input keyevent 4 #Home Key (P350 bug)
-    sleep 0.5
-    init_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_init.py
-    echo salarm_android_python -c -d $init_file
+init_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_init.py
+server_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_server.py
+if [[ $* == *--test-init* ]]; then
+    FORCE_COPY=$FORCE_COPY salarm_android_python -c $init_file
+elif [[ $* == *--init* ]]; then
+    FORCE_COPY=$FORCE_COPY salarm_android_python -c -s -d $init_file
+    sleep 14
     salarm_android_python -c -d $init_file
-    sleep 20
-    salarm_android_python -c -d $init_file
-    sleep 20
+    sleep 8
 else
     echo adb forward tcp:8000 tcp:8000
     adb forward tcp:8000 tcp:8000
-    echo salarm_android_python $server_file --adb
-    salarm_android_python -c $server_file --adb
+    FORCE_COPY=$FORCE_COPY salarm_android_python -c $server_file --adb
 fi
 
 
