@@ -1,0 +1,88 @@
+#!/bin/bash
+# smart_alarm
+# Copyright (c) 2020, Joaquin G. Duo
+# Code Licensed under LGPL License. See LICENSE file.
+
+DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/qpython/scripts}
+QPYTHON_PATH=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin/qpython.sh}
+
+function exec_cmd(){
+    echo '$(date) Executing:'
+    echo "    $(printf ' %q' "$@")"
+    eval $(printf ' %q' "$@")
+    local ret=$?
+    if [[ $ret != 0 ]] ; then
+        echo "Command failed: $*
+        ret val: $ret
+        "
+        exit 1
+    fi
+    return $ret
+}
+
+DETACH=0
+COPY=0
+FORCE_COPY=${FORCE_COPY:-0}
+FORCE_STOP=${FORCE_STOP:-0}
+# Check flags
+while test $# -gt 0; do
+case "$1" in
+    -c|--copy)
+    COPY=1
+    shift
+    ;;
+    -f|--force-copy)
+    FORCE_COPY=1
+    shift
+    ;;
+    -d|--detach)
+    DETACH=1
+    shift
+    ;;
+    -s|--force-stop)
+    FORCE_STOP=1
+    shift
+    ;;
+    *)
+    break
+    ;;
+esac
+done
+
+FILE_PATH=$1
+shift
+
+if [[ $FILE_PATH == "" ]];then
+    exec_cmd adb shell $QPYTHON_PATH
+else
+    BASENAME=$(basename $FILE_PATH)
+    REMOTE_PATH="$DEPLOY_ANDROID_SCRIPTS_DIR/$BASENAME"
+
+    if [[ $COPY == 1 ]];then
+        DO_COPY=0
+        if [[ $FORCE_COPY == 1 ]];then
+            DO_COPY=1
+            echo "Forcing copying file..."
+        elif [[ $(adb shell ls $REMOTE_PATH) == *"No such file or directory"* ]]; then
+            DO_COPY=1
+            echo "Copying missing file..."
+        fi
+        if [[ $DO_COPY == 1 ]];then
+            exec_cmd adb push $FILE_PATH $REMOTE_PATH
+        else
+            echo "File $BASENAME already copied"
+        fi
+    fi
+
+    if [[ $DETACH == 1 ]]; then
+        if [[ $FORCE_STOP == 1 ]];then
+            exec_cmd adb shell am force-stop org.qpython.qpy
+        fi
+        exec_cmd adb shell am start -n org.qpython.qpy/org.qpython.qpylib.MPyApi -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
+        -e "com.quseit.common.extra.CONTENT_URL2" "$REMOTE_PATH $*" \
+        -e "com.quseit.common.extra.CONTENT_URL0" "shortcut" \
+        -e "com.quseit.common.extra.CONTENT_URL1" "script"
+    else
+        exec_cmd adb shell $QPYTHON_PATH $REMOTE_PATH $*
+    fi
+fi

@@ -13,9 +13,26 @@ if [[ $* == *--deploy* ]]; then
   adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
 fi
 
-echo adb forward tcp:8000 tcp:8000
-adb forward tcp:8000 tcp:8000
-echo adb shell $QPYTHON_PATH $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py -l 127.0.0.1
-adb shell ANDROID_AUTH_TOKEN=$ANDROID_AUTH_TOKEN $QPYTHON_PATH $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py -l 127.0.0.1
+
+if [[ $* == *--init* ]]; then
+    adb shell input keyevent 26 #Power Key
+    sleep 0.5
+    adb shell input keyevent 4 #Home Key (P350 bug)
+    sleep 0.5
+    adb shell input keyevent 4 #Home Key (P350 bug)
+    sleep 0.5
+    init_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_init.py
+    echo salarm_android_python -c -d $init_file
+    salarm_android_python -c -d $init_file
+    sleep 20
+    salarm_android_python -c -d $init_file
+    sleep 20
+else
+    echo adb forward tcp:8000 tcp:8000
+    adb forward tcp:8000 tcp:8000
+    echo salarm_android_python $server_file --adb
+    salarm_android_python -c $server_file --adb
+fi
+
 
 
