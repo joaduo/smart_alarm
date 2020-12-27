@@ -96,7 +96,7 @@ install_pkg(){
 }
 
 upload_server(){
-  local server_file="$(dirname "$0")"/../android_server.py
+  local server_file=$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')/android_server.py
   exec_cmd adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
 }
 

@@ -3,18 +3,19 @@
 # Copyright (c) 2020, Joaquin G. Duo
 # Code Licensed under LGPL License. See LICENSE file.
 
-DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/Download/qpython/scripts/}
+DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/qpython/scripts}
 ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN:-123}
+QPYTHON_PATH=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin/qpython.sh}
 
 if [[ $* == *--deploy* ]]; then
-  server_file="$(dirname "$0")"/../android_server.py
+  server_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_server.py
   echo adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
   adb push $server_file $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py
 fi
 
 echo adb forward tcp:8000 tcp:8000
 adb forward tcp:8000 tcp:8000
-echo adb shell /data/data/org.qpython.qpy/files/bin/qpython.sh /sdcard/qpython/scripts/android_server.py -l 127.0.0.1
-adb shell ANDROID_AUTH_TOKEN=$ANDROID_AUTH_TOKEN /data/data/org.qpython.qpy/files/bin/qpython.sh /sdcard/qpython/scripts/android_server.py -l 127.0.0.1
+echo adb shell $QPYTHON_PATH $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py -l 127.0.0.1
+adb shell ANDROID_AUTH_TOKEN=$ANDROID_AUTH_TOKEN $QPYTHON_PATH $DEPLOY_ANDROID_SCRIPTS_DIR/android_server.py -l 127.0.0.1
 
 

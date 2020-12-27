@@ -170,6 +170,8 @@ def main():
     ANDROID_SERVER_PORT = args.port
     ANDROID_AUTH_TOKEN = args.token
     assert ANDROID_AUTH_TOKEN, 'Please specify ANDROID_AUTH_TOKEN'
+    # Simple test
+    _ = androidhelper.Android()
     run(addr=args.listen, port=args.port)
 
 

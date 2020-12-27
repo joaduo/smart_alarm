@@ -8,6 +8,8 @@ fi
 
 app="smart_alarm"
 
+pip3 uninstall smart_alarm
+
 pip3 install dist/$app\-*.tar.gz
 
 exit $?

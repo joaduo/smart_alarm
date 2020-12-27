@@ -6,6 +6,7 @@ Code Licensed under LGPL License. See LICENSE file.
 """
 from setuptools import setup, find_packages
 import six
+import os
 
 
 name = 'smart_alarm'
@@ -34,7 +35,7 @@ setup(
   url = 'https://github.com/joaduo/'+name,
   keywords = ['alarm', 'nvr', 'android', 'smtp', 'sms'],
   install_requires=reqs,
-#   scripts=[
-#            'smart_alarm/commands/xpathshell',
-#            ],
+  scripts=[os.path.join(name, 'commands', p)
+        for p in os.listdir(os.path.join(os.path.dirname(__file__), name, 'commands'))
+  ],
 )
