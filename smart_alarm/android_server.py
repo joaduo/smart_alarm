@@ -144,7 +144,7 @@ def run(server_class=HTTPServer, handler_class=CustomHandler, addr='localhost', 
 def main():
     global ANDROID_SERVER, ANDROID_SERVER_PORT, ANDROID_AUTH_TOKEN
     logging.basicConfig()
-    logger.setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.INFO)
     parser = argparse.ArgumentParser(description='Android HTTP server')
     parser.add_argument(
         '-l',
