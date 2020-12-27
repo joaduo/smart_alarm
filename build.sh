@@ -6,10 +6,13 @@ fi
 
 app="smart_alarm"
 
-rm dist/$app\-*.tar.gz
+if ls dist/$app\-*.tar.gz > /dev/null ; then
+    rm dist/$app\-*.tar.gz
+fi
 
-pip3 install twine
+if ! type twine > /dev/null ; then
+    pip3 install twine
+fi
 
 python3 setup.py sdist && twine check dist/$app\-*.tar.gz
-
 exit $?
