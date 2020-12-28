@@ -43,7 +43,7 @@ function exec_cmd(){
     echo "    $(printf ' %q' "$@")"
     echo '---------------------' >> $LOG_FILE
     echo "$(date) Executing: $(printf ' %q' "$@")" >> $LOG_FILE
-    if [[ $DEPLOY_ANDROID_DEBUG == 0 ]] ; then
+    if [[ $VERBOSE == 0 ]] ; then
         eval $(printf ' %q' "$@") >> $LOG_FILE 2>&1
         local ret=$?
     else
@@ -92,59 +92,74 @@ function install_pkg(){
       exec_cmd adb shell pm install $remote_path
       was_installed=1
   fi
-#   if [[ $was_installed == 1 ]];then
-#       exec_cmd salarm_android_python --patch-end-sh ; then
-#   fi
+  if [[ $was_installed == 1 ]];then
+      exec_cmd salarm_android_python --patch-end-sh
+  fi
 }
 
 function install_android_server(){
     echo "Installing android server...."
     local execpath=/usr/local/bin/salarm_android_server
     $execpath --deploy
-    local fpath=/etc/systemd/system/salarm_android_server
-    local fcontents="
-[Unit]
-Description=Smart Alarm Android server
+    local fpath=/etc/systemd/system/salarm_android_server.service
+    local fcontents="[Unit]
+Description=Smart Alarm Android Server
 After=network.target
 
 [Service]
-Type=simple
-Restart=always
 ExecStart=$execpath
+WorkingDirectory=/home/pi
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
 
 [Install]
-WantedBy=salarm_mail_server
-    "
+WantedBy=multi-user.target
+"
+    echo "Creating $fpath..."
     echo "$fcontents" > $fpath
 
-    systemctl daemon-reload && \
-    systemctl enable salarm_android_server && \
-    systemctl start salarm_android_server
+    exec_cmd systemctl daemon-reload && \
+    exec_cmd systemctl enable salarm_android_server.service && \
+    exec_cmd systemctl start salarm_android_server.service && \
+    systemctl status salarm_android_server.service
 }
 
 function install_mail_server(){
     echo "Installing mail server...."  
-    local fpath=/etc/systemd/system/salarm_mail_server
-    local fcontents="
-[Unit]
+    local fpath=/etc/systemd/system/salarm_mail_server.service
+    local fcontents="[Unit]
 Description=Smart Alarm Mail server
 After=network.target
 
 [Service]
-Type=simple
-Restart=always
 ExecStart=/usr/local/bin/salarm_mail_server
-    "
+WorkingDirectory=/home/pi
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
 
+[Install]
+WantedBy=multi-user.target
+"
+    echo "Creating $fpath..."
     echo "$fcontents" > $fpath
 
-    systemctl daemon-reload && \
-    systemctl enable salarm_mail_server && \
-    systemctl start salarm_mail_server
+    exec_cmd systemctl daemon-reload && \
+    exec_cmd systemctl enable salarm_mail_server.service && \
+    exec_cmd systemctl start salarm_mail_server.service && \
+    systemctl status salarm_mail_server.service
 }
 
+VERBOSE=${VERBOSE:-0}
 while test $# -gt 0; do
 case "$1" in
+    -v|--verbose)
+    VERBOSE=1
+    shift
+    ;;
     -P|--package)
     install_pkg
     shift
@@ -162,7 +177,7 @@ case "$1" in
     shift
     ;;
     -h|--help)
-    echo "$cmd_name [--all] [-P|--package] [-A|--android-server] [-M|--mail-server] [-h|--help]"
+    echo "$cmd_name [--all] [-P|--package] [-A|--android-server] [-M|--mail-server] [-v|--verbose] [-h|--help]"
     exit 0
     ;;
     *)

@@ -12,6 +12,7 @@ import email
 import logging
 import re
 import os
+import inspect
 
 
 logger = logging.getLogger('mail_server')
@@ -29,21 +30,34 @@ NOTIFICATION_TEMPLATE = os.environ.get('NOTIFICATION_TEMPLATE', 'Alarm in {title
 NAME_CHANNEL = dict(Garage=2, Jardin=1, Cocina_Arriba=3)
 
 
+def f(fmt_string):
+    frame = inspect.currentframe()
+    fvars = frame.f_back.f_globals.copy()
+    fvars.update(frame.f_back.f_locals)
+    try:
+        return fmt_string.format(**fvars)
+    finally:
+        del frame
+
+
 class CustomSMTPServer(smtpd.SMTPServer):
     def sms_send(self, phone, msg):
-        url = f'http://{ANDROID_SERVER}:{ANDROID_SERVER_PORT}' 
+        url = f('http://{ANDROID_SERVER}:{ANDROID_SERVER_PORT}') 
         json = {'method':'sms_send',
                 'kwargs':{'phone':phone, 'msg':msg},
                 'auth_token': ANDROID_AUTH_TOKEN}
         try:
             r = requests.post(url, json=json)
-            logger.info(f'Got {r.json()} for {msg!r} to {phone}')
+            logger.info(f('Got {r.json()} for {msg!r} to {phone}'))
             return r.json()
         except Exception:
-            logging.exception(f'While sending {msg!r} to {phone}')
+            logging.exception(f('While sending {msg!r} to {phone}'))
 
     def extract_msg(self, data):
-        em = email.message_from_bytes(data)
+        if isinstance(data, str):
+            em = email.message_from_string(data)
+        else:
+            em = email.message_from_bytes(data)
         if em.is_multipart():
             # No test email are multipart (they have attachment)
             em = em.get_payload()[0]
@@ -63,9 +77,9 @@ class CustomSMTPServer(smtpd.SMTPServer):
     count = 0
     def dump_email(self, data):
         self.count += 1
-        fname = f'/tmp/smart_alarm_email.{self.count}.txt'
+        fname = f('/tmp/smart_alarm_email.{self.count}.txt')
         with open(fname, 'wb') as fp:
-            logger.info(f'Saving {fname}...')
+            logger.info(f('Saving {fname}...'))
             fp.write(data)
 
     def process_message(self, peer, mailfrom, rcpttos, data, **options):
@@ -109,8 +123,8 @@ def main():
     MAIL_LISTEN_ADDRESS = args.listen
     MAIL_LISTEN_PORT = args.port
     ANDROID_AUTH_TOKEN = args.token
-    assert ANDROID_AUTH_TOKEN, 'please provide a secret token, use -t flag (insecure) or ANDROID_AUTH_TOKEN env var'
     _ = CustomSMTPServer((MAIL_LISTEN_ADDRESS, MAIL_LISTEN_PORT), None)
+    logger.info(f('Starting Mail server at smtp://{MAIL_LISTEN_ADDRESS}:{MAIL_LISTEN_PORT}'))
     asyncore.loop()
 
 

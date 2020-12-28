@@ -73,12 +73,15 @@ if [[ $PATCH_END_SH == 1 ]]; then
     contents="$(adb shell cat $END_SH_PATH)"
     temp_py=""
     if [[ $contents == *"No such file or directory"* ]]; then
+        # Qpython was not ran for the first time
+        # Manually init it...
+        echo "Initializing Qpython..."
         temp_py=$TEMP_DIR/temp_init.py
         echo "
 import sys
 print(sys)" > $temp_py
         exec_cmd $this_cmd -c -f -s -d $temp_py
-        seconds=30
+        seconds=20
         echo "Waiting $seconds sec for qpython initialization..."
         sleep $seconds
         contents="$(adb shell cat $END_SH_PATH)"
@@ -87,20 +90,18 @@ print(sys)" > $temp_py
             exit 1
         fi
     fi
-    new_contents="#!/system/bin/sh
-  # File replaced to avoid waiting for input (Smart Alarm modification)"
-    if [[ $contents != $new_contents ]]; then
+    new_contents="#!/system/bin/sh"
+    if [[ $(echo "$contents" | tr -d '\r') != $new_contents ]]; then
         exec_cmd adb shell cp $END_SH_PATH $END_SH_PATH.backup
-        temp_end_sh=$TEMP_DIR/temp_end.sh
-        echo "$new_contents" > $temp_end_sh && \
-        exec_cmd salarm_android_cp -f $temp_end_sh $END_SH_PATH
-        rm $temp_end_sh
+        exec_cmd adb shell "echo '$new_contents' > $END_SH_PATH"
         if [[ $temp_py != "" ]]; then
-            echo "Stopping detached running app"
+            echo "Stopping detached running app..."
             exec_cmd adb shell am force-stop org.qpython.qpy
             rm $temp_py
         fi
         exit 0
+    else
+      echo "Nothing to do on $END_SH_PATH"
     fi
     exit 1
 fi
@@ -116,8 +117,8 @@ else
     BASENAME=$(basename $FILE_PATH)
     REMOTE_PATH="$DEPLOY_ANDROID_SCRIPTS_DIR/$BASENAME"
 
-    if [[ $COPY == 1 ]];then
-        FORCE_COPY=$FORCE_COPY salarm_android_cp $FILE_PATH $REMOTE_PATH
+    if [[ $COPY == 1 || $ONLY_COPY == 1 ]];then
+        exec_cmd FORCE_COPY=$FORCE_COPY salarm_android_cp $FILE_PATH $REMOTE_PATH
         if [[ $ONLY_COPY == 1 ]]; then
             echo "--only-copy mode, finishing."
             exit 0
@@ -130,7 +131,7 @@ else
         fi
         exec_cmd salarm_android_screen && \
         exec_cmd adb shell am start -n org.qpython.qpy/org.qpython.qpylib.MPyApi -a android.intent.action.MAIN -c android.intent.category.LAUNCHER \
-        -e "com.quseit.common.extra.CONTENT_URL2" "$REMOTE_PATH $*" \
+        -e "com.quseit.common.extra.CONTENT_URL2" "$REMOTE_PATH" \
         -e "com.quseit.common.extra.CONTENT_URL0" "shortcut" \
         -e "com.quseit.common.extra.CONTENT_URL1" "script"
     else

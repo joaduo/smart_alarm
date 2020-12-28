@@ -10,7 +10,6 @@ Code Licensed under LGPL License. See LICENSE file.
 import six
 import argparse
 import sys
-import time
 if six.PY3:
     from http.server import HTTPServer, BaseHTTPRequestHandler
     import html
@@ -71,6 +70,7 @@ class Commands:
     )
     def print_msg(self, msg, std='out', color='', bg_color='', bold=False, underline=False):
         header = ''
+        trail = ''
         color = color.upper()
         bg_color = bg_color.upper()
         COLOR_SEQ = "\033[1;%dm"
@@ -112,10 +112,10 @@ class CustomHandler(BaseHTTPRequestHandler):
             print(e)
             docshtml = ''
         docs = '''<pre>
-curl -d '{"method":"sms_send", "kwargs":{"phone":"2615963994"}, "auth_token":"XXX"}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
-curl -d '{"method":"sms_get_messages", "auth_token":"XXX"}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
-curl -d '{"method":"sms_get_messages", "kwargs":{"unread":false}, "auth_token":"XXX"}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
-curl -d '{"method":"print_msg", "kwargs":{"msg":"Log output", "std":"err", "color":null}, "auth_token":"XXX"}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
+curl -d '{"method":"sms_send", "kwargs":{"phone":"2615963994"}, "auth_token":""}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
+curl -d '{"method":"sms_get_messages", "auth_token":""}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
+curl -d '{"method":"sms_get_messages", "kwargs":{"unread":false}, "auth_token":""}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
+curl -d '{"method":"print_msg", "kwargs":{"msg":"Log output", "std":"err", "color":"red"}, "auth_token":""}' -X POST http://LISTEN_ADDRESS:LISTEN_PORT/
 </pre>
 '''.replace('LISTEN_ADDRESS:LISTEN_PORT','%s:%s' % (ANDROID_SERVER, ANDROID_SERVER_PORT))
         return self._html_page('API Docs', docs + docshtml)

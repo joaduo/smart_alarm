@@ -7,6 +7,32 @@ ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN}
 ANDROID_SERVER_METHODS=${ANDROID_SERVER_METHODS:-""}
 PORT=8000
 
+TEMP_DIR=${TEMP_DIR:-$HOME}
+LOG_FILE=$TEMP_DIR/$(basename $0).log
+
+function exec_cmd(){
+    echo 'Executing:'
+    echo "    $(printf ' %q' "$@")"
+    echo '---------------------' >> $LOG_FILE
+    echo "$(date) Executing: $(printf ' %q' "$@")" >> $LOG_FILE
+    if [[ $VERBOSE == 0 ]] ; then
+        eval $(printf ' %q' "$@") >> $LOG_FILE 2>&1
+        local ret=$?
+    else
+        eval $(printf ' %q' "$@") | tee -a $LOG_FILE 2>&1
+        local ret=$?
+    fi
+    if [[ $ret != 0 ]] ; then
+        echo "Command failed: $*
+        ret val: $ret
+        "
+        echo "Check $LOG_FILE:"
+        tail $LOG_FILE
+        exit 1
+    fi
+    return $ret
+}
+
 if ! python3 -c 'import smart_alarm' ; then
     echo "ERROR: smart_alarm package or python3 not installed"
     exit 1
@@ -18,19 +44,19 @@ server_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"
 if [[ $* == *--deploy* ]]; then
     export FORCE_COPY=1
     echo "Just deploying files to android..."
-    salarm_android_python --only-copy $init_file
-    salarm_android_python --only-copy $server_file
+    exec_cmd salarm_android_python --only-copy $init_file
+    exec_cmd salarm_android_python --only-copy $server_file
     export FORCE_COPY=0
     exit 0
 fi
 
 function init_server(){
     local test_output=$(salarm_android_python -c $init_file)
-    elif [[ $test_output == *"SL4A: Connection refused"* ]];then
-        salarm_android_python -s -d $init_file
-        sleep 14
-        salarm_android_python -d $init_file
-        sleep 8
+    if [[ $test_output == *"SL4A: Connection refused"* ]];then
+        exec_cmd salarm_android_python -s -d $init_file && \
+        sleep 14 && \
+        salarm_android_python -d $init_file && \
+        sleep 8 && \
         test_output=$(salarm_android_python -c $init_file)
     fi
 
@@ -45,7 +71,7 @@ function init_server(){
 if init_server ;then
     echo adb forward tcp:$PORT tcp:$PORT "#Forwarding port"
     adb forward tcp:$PORT tcp:$PORT
-    salarm_android_python $server_file --adb --listen 127.0.0.1 --port $PORT --token "$ANDROID_AUTH_TOKEN" --methods "$ANDROID_SERVER_METHODS"
+    salarm_android_python $server_file --adb --listen 127.0.0.1 --port $PORT --token "'$ANDROID_AUTH_TOKEN'" --methods "'$ANDROID_SERVER_METHODS'"
 else
     exit 1
 fi
