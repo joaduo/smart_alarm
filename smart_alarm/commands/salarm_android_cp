@@ -1,0 +1,38 @@
+#!/bin/bash
+# smart_alarm
+# Copyright (c) 2020, Joaquin G. Duo
+# Code Licensed under LGPL License. See LICENSE file.
+
+FORCE_COPY=${FORCE_COPY:-0}
+# Check flags
+while test $# -gt 0; do
+case "$1" in
+    -f|--force-copy)
+    FORCE_COPY=1
+    shift
+    ;;
+    *)
+    break
+    ;;
+esac
+done
+
+FILE_PATH=$1
+shift
+
+FILE_DST=$1
+shift
+
+DO_COPY=0
+if [[ $FORCE_COPY == 1 ]];then
+    DO_COPY=1
+    echo "Forcing copying file..."
+elif [[ $(adb shell ls $FILE_DST) == *"No such file or directory"* ]]; then
+    DO_COPY=1
+    echo "Copying missing file..."
+fi
+if [[ $DO_COPY == 1 ]];then
+    adb push $FILE_PATH $FILE_DST
+else
+    echo "File already copied ($FILE_PATH -> $FILE_DST)"
+fi

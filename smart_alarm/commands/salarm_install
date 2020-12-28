@@ -1,0 +1,174 @@
+#!/bin/bash
+# smart_alarm
+# Copyright (c) 2020, Joaquin G. Duo
+# Code Licensed under LGPL License. See LICENSE file.
+
+cmd_name=$(basename $0)
+
+PKG=qpython-app-release-v1.4.3.apk
+
+DEPLOY_ANDROID_SDCARD_DIR=${DEPLOY_ANDROID_SDCARD_DIR:-/sdcard}
+DEPLOY_ANDROID_DOWNLOAD_DIR=${DEPLOY_ANDROID_DOWNLOAD_DIR:-$DEPLOY_ANDROID_SDCARD_DIR/Download}
+DEPLOY_ANDROID_REINSTALL=${DEPLOY_ANDROID_REINSTALL}
+DEPLOY_ANDROID_DEBUG=${DEPLOY_ANDROID_DEBUG:-1}
+TEMP_DIR=${TEMP_DIR:-$HOME}
+
+LOG_FILE=$TEMP_DIR/$cmd_name.log
+
+function ask_variable(){
+    local var_name=$1
+    local question="$2"
+    local default_value="$3"
+    if [[ ${!var_name} != "" ]] ; then
+        var_value="${!var_name}"
+    else
+        read -p "    $question" var_value
+    fi
+    var_value=${var_value:-$default_value}
+    case "${var_value,,}" in
+        y|yes|true|1)
+        echo 1
+        ;;
+        n|no|false|0)
+        echo 0
+        ;;
+        *)
+        echo "$var_value"
+        ;;
+    esac
+}
+
+function exec_cmd(){
+    echo 'Executing:'
+    echo "    $(printf ' %q' "$@")"
+    echo '---------------------' >> $LOG_FILE
+    echo "$(date) Executing: $(printf ' %q' "$@")" >> $LOG_FILE
+    if [[ $DEPLOY_ANDROID_DEBUG == 0 ]] ; then
+        eval $(printf ' %q' "$@") >> $LOG_FILE 2>&1
+        local ret=$?
+    else
+        eval $(printf ' %q' "$@") | tee -a $LOG_FILE 2>&1
+        local ret=$?
+    fi
+    if [[ $ret != 0 ]] ; then
+        echo "Command failed: $*
+        ret val: $ret
+        "
+        echo "Check $LOG_FILE:"
+        tail $LOG_FILE
+        exit 1
+    fi
+    return $ret
+}
+
+function install_pkg(){
+  if [[ $(adb shell ls -d $DEPLOY_ANDROID_DOWNLOAD_DIR) == *"No such file or directory"* ]]; then
+    echo "Directory $DEPLOY_ANDROID_DOWNLOAD_DIR does not exist on android device, please specify it via DEPLOY_ANDROID_DOWNLOAD_DIR env var"
+    return 1
+  fi
+
+  
+  PKG_PATH=$TEMP_DIR/$PKG
+  if [[ ! -e $PKG_PATH ]] ; then
+      echo "Downloading package to $PKG_PATH"
+      exec_cmd wget https://github.com/qpython-android/qpython/releases/download/v1.4.3/qpython-app-release.apk -O $PKG_PATH
+  fi
+
+  echo "Sending $PKG_PATH to android device..."
+  exec_cmd salarm_android_cp $PKG_PATH $DEPLOY_ANDROID_DOWNLOAD_DIR
+
+  local already_installed=$(adb shell pm list packages | grep org.qpython.qpy)
+  local was_installed=0
+  local remote_path=$DEPLOY_ANDROID_DOWNLOAD_DIR/$PKG
+  if [[ $already_installed != "" ]] ; then
+      local reinstall=$(ask_variable DEPLOY_ANDROID_REINSTALL "Uninstall and reinstall $PKG?(y/N) " N)
+      if [[ $reinstall == 1 ]]; then
+        echo "Reinstalling $PKG..."
+        exec_cmd adb shell pm uninstall org.qpython.qpy && \
+        exec_cmd adb shell pm install $remote_path
+        was_installed=1
+      fi
+  else
+      exec_cmd adb shell pm install $remote_path
+      was_installed=1
+  fi
+#   if [[ $was_installed == 1 ]];then
+#       exec_cmd salarm_android_python --patch-end-sh ; then
+#   fi
+}
+
+function install_android_server(){
+    echo "Installing android server...."
+    local execpath=/usr/local/bin/salarm_android_server
+    $execpath --deploy
+    local fpath=/etc/systemd/system/salarm_android_server
+    local fcontents="
+[Unit]
+Description=Smart Alarm Android server
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=$execpath
+
+[Install]
+WantedBy=salarm_mail_server
+    "
+    echo "$fcontents" > $fpath
+
+    systemctl daemon-reload && \
+    systemctl enable salarm_android_server && \
+    systemctl start salarm_android_server
+}
+
+function install_mail_server(){
+    echo "Installing mail server...."  
+    local fpath=/etc/systemd/system/salarm_mail_server
+    local fcontents="
+[Unit]
+Description=Smart Alarm Mail server
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/local/bin/salarm_mail_server
+    "
+
+    echo "$fcontents" > $fpath
+
+    systemctl daemon-reload && \
+    systemctl enable salarm_mail_server && \
+    systemctl start salarm_mail_server
+}
+
+while test $# -gt 0; do
+case "$1" in
+    -P|--package)
+    install_pkg
+    shift
+    ;;
+    -A|--android-server)
+    install_android_server
+    shift
+    ;;
+    -M|--mail-server)
+    install_mail_server
+    shift
+    ;;
+    -a|--all)
+    install_pkg && install_android_server && install_mail_server
+    shift
+    ;;
+    -h|--help)
+    echo "$cmd_name [--all] [-P|--package] [-A|--android-server] [-M|--mail-server] [-h|--help]"
+    exit 0
+    ;;
+    *)
+    break
+    ;;
+esac
+done
+
+

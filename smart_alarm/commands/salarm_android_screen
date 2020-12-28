@@ -3,18 +3,29 @@
 
 STATUS=$(adb shell dumpsys input_method | grep mScreenOn | awk '{print $2}' | tr -d '\r\000-\010\013\014\016-\037')
 
+TURN_OFF=0
+if [[ $* == *--off* ]]; then
+    TURN_OFF=1
+fi
+
+echo "$STATUS"
 if [[ $STATUS == "mScreenOn=false" ]]; then
-  #Power Key =26, Home Key=4
-  adb shell input keyevent 26 && \
-  sleep 2 && \
-  adb shell input keyevent 4 && \
-  sleep 1 && \
-  adb shell input keyevent 4 && \
-  sleep 1
-else
-  echo "Screen is on $STATUS"
-  if [[ $* == *--off* ]]; then
+  if [[ $TURN_OFF == 0 ]]; then
+    #Power Key =26, Home Key=4
     adb shell input keyevent 26 && \
-    sleep 2
+    sleep 2 && \
+    adb shell input keyevent 4 && \
+    sleep 1 && \
+    adb shell input keyevent 4 && \
+    sleep 1
   fi
+elif [[ $STATUS == "mScreenOn=true" ]];then
+  if [[ $TURN_OFF == 1 ]];then
+    adb shell input keyevent 26 && \
+    sleep 1
+  fi
+else
+  echo "ERROR: on $(adb shell dumpsys input_method)"
+  echo "ERROR: got $STATUS"
+  exit 1
 fi

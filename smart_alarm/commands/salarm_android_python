@@ -3,8 +3,14 @@
 # Copyright (c) 2020, Joaquin G. Duo
 # Code Licensed under LGPL License. See LICENSE file.
 
+cmd_name=$(basename $0)
+this_cmd=$0
+
 DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/qpython/scripts}
-QPYTHON_PATH=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin/qpython.sh}
+QPYTHON_DIR=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin}
+QPYTHON_PATH=${QPYTHON_PATH:-$QPYTHON_DIR/qpython.sh}
+END_SH_PATH=${END_SH_PATH:-$QPYTHON_DIR/end.sh}
+TEMP_DIR=${TEMP_DIR:-$HOME}
 
 function exec_cmd(){
     echo "$(date) Executing:"
@@ -24,6 +30,8 @@ DETACH=0
 COPY=0
 FORCE_COPY=${FORCE_COPY:-0}
 FORCE_STOP=${FORCE_STOP:-0}
+ONLY_COPY=${ONLY_COPY:-0}
+PATCH_END_SH=${PATCH_END_SH:-0}
 # Check flags
 while test $# -gt 0; do
 case "$1" in
@@ -35,6 +43,10 @@ case "$1" in
     FORCE_COPY=1
     shift
     ;;
+    -o|--only-copy)
+    ONLY_COPY=1
+    shift
+    ;;
     -d|--detach)
     DETACH=1
     shift
@@ -43,34 +55,72 @@ case "$1" in
     FORCE_STOP=1
     shift
     ;;
+    --patch-end-sh)
+    PATCH_END_SH=1
+    shift
+    ;;
+    -h|--help)
+    echo "$cmd_name [-c|--copy] [-f|--force-copy] [-o|--only-copy] [-d|--detach] [-s|--force-stop] [--patch-end-sh] [-h|--help]"
+    exit 0
+    ;;
     *)
     break
     ;;
 esac
 done
 
+if [[ $PATCH_END_SH == 1 ]]; then
+    contents="$(adb shell cat $END_SH_PATH)"
+    temp_py=""
+    if [[ $contents == *"No such file or directory"* ]]; then
+        temp_py=$TEMP_DIR/temp_init.py
+        echo "
+import sys
+print(sys)" > $temp_py
+        exec_cmd $this_cmd -c -f -s -d $temp_py
+        seconds=30
+        echo "Waiting $seconds sec for qpython initialization..."
+        sleep $seconds
+        contents="$(adb shell cat $END_SH_PATH)"
+        if [[ $contents == *"No such file or directory"* ]]; then
+            echo "Failed to init Qpython, something is wrong in the phone. Try starting a qpython terminal manually"
+            exit 1
+        fi
+    fi
+    new_contents="#!/system/bin/sh
+  # File replaced to avoid waiting for input (Smart Alarm modification)"
+    if [[ $contents != $new_contents ]]; then
+        exec_cmd adb shell cp $END_SH_PATH $END_SH_PATH.backup
+        temp_end_sh=$TEMP_DIR/temp_end.sh
+        echo "$new_contents" > $temp_end_sh && \
+        exec_cmd salarm_android_cp -f $temp_end_sh $END_SH_PATH
+        rm $temp_end_sh
+        if [[ $temp_py != "" ]]; then
+            echo "Stopping detached running app"
+            exec_cmd adb shell am force-stop org.qpython.qpy
+            rm $temp_py
+        fi
+        exit 0
+    fi
+    exit 1
+fi
+
 FILE_PATH=$1
 shift
 
 if [[ $FILE_PATH == "" ]];then
     exec_cmd adb shell $QPYTHON_PATH
+elif [[ $FILE_PATH == "pip" ]];then
+    exec_cmd adb shell $QPYTHON_PATH $DEPLOY_ANDROID_SCRIPTS_DIR/pip_console.py
 else
     BASENAME=$(basename $FILE_PATH)
     REMOTE_PATH="$DEPLOY_ANDROID_SCRIPTS_DIR/$BASENAME"
 
     if [[ $COPY == 1 ]];then
-        DO_COPY=0
-        if [[ $FORCE_COPY == 1 ]];then
-            DO_COPY=1
-            echo "Forcing copying file..."
-        elif [[ $(adb shell ls $REMOTE_PATH) == *"No such file or directory"* ]]; then
-            DO_COPY=1
-            echo "Copying missing file..."
-        fi
-        if [[ $DO_COPY == 1 ]];then
-            exec_cmd adb push $FILE_PATH $REMOTE_PATH
-        else
-            echo "File $BASENAME already copied"
+        FORCE_COPY=$FORCE_COPY salarm_android_cp $FILE_PATH $REMOTE_PATH
+        if [[ $ONLY_COPY == 1 ]]; then
+            echo "--only-copy mode, finishing."
+            exit 0
         fi
     fi
 

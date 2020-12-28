@@ -3,29 +3,53 @@
 # Copyright (c) 2020, Joaquin G. Duo
 # Code Licensed under LGPL License. See LICENSE file.
 
-DEPLOY_ANDROID_SCRIPTS_DIR=${DEPLOY_ANDROID_SCRIPTS_DIR:-/sdcard/qpython/scripts}
-ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN:-123}
-QPYTHON_PATH=${QPYTHON_PATH:-/data/data/org.qpython.qpy/files/bin/qpython.sh}
+ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN}
+ANDROID_SERVER_METHODS=${ANDROID_SERVER_METHODS:-""}
+PORT=8000
 
-FORCE_COPY=${FORCE_COPY:-0}
-if [[ $* == *--foce-copy* ]]; then
-  FORCE_COPY=1
+if ! python3 -c 'import smart_alarm' ; then
+    echo "ERROR: smart_alarm package or python3 not installed"
+    exit 1
 fi
 
 init_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_init.py
 server_file="$(python3 -c 'import smart_alarm; print(smart_alarm.__path__[0])')"/android_server.py
-if [[ $* == *--test-init* ]]; then
-    FORCE_COPY=$FORCE_COPY salarm_android_python -c $init_file
-elif [[ $* == *--init* ]]; then
-    FORCE_COPY=$FORCE_COPY salarm_android_python -c -s -d $init_file
-    sleep 14
-    salarm_android_python -c -d $init_file
-    sleep 8
-else
-    echo adb forward tcp:8000 tcp:8000
-    adb forward tcp:8000 tcp:8000
-    FORCE_COPY=$FORCE_COPY salarm_android_python -c $server_file --adb
+
+if [[ $* == *--deploy* ]]; then
+    export FORCE_COPY=1
+    echo "Just deploying files to android..."
+    salarm_android_python --only-copy $init_file
+    salarm_android_python --only-copy $server_file
+    export FORCE_COPY=0
+    exit 0
 fi
+
+function init_server(){
+    local test_output=$(salarm_android_python -c $init_file)
+    elif [[ $test_output == *"SL4A: Connection refused"* ]];then
+        salarm_android_python -s -d $init_file
+        sleep 14
+        salarm_android_python -d $init_file
+        sleep 8
+        test_output=$(salarm_android_python -c $init_file)
+    fi
+
+    if [[ $test_output != *"SL4A: Connection OK"* ]]; then
+      echo "ERROR: fatal error on android side check below:"
+      echo "$test_output"
+      return 1
+    fi
+    return 0
+}
+
+if init_server ;then
+    echo adb forward tcp:$PORT tcp:$PORT "#Forwarding port"
+    adb forward tcp:$PORT tcp:$PORT
+    salarm_android_python $server_file --adb --listen 127.0.0.1 --port $PORT --token "$ANDROID_AUTH_TOKEN" --methods "$ANDROID_SERVER_METHODS"
+else
+    exit 1
+fi
+
 
 
 

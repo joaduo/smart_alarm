@@ -62,10 +62,10 @@ class CustomSMTPServer(smtpd.SMTPServer):
 
     count = 0
     def dump_email(self, data):
-        fname = f'data.{self.count}.txt'
         self.count += 1
+        fname = f'/tmp/smart_alarm_email.{self.count}.txt'
         with open(fname, 'wb') as fp:
-            logger.info(fname)
+            logger.info(f'Saving {fname}...')
             fp.write(data)
 
     def process_message(self, peer, mailfrom, rcpttos, data, **options):
