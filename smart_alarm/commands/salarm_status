@@ -1,0 +1,31 @@
+#!/bin/bash
+# smart_alarm
+# Copyright (c) 2020, Joaquin G. Duo
+# Code Licensed under LGPL License. See LICENSE file.
+
+while test $# -gt 0; do
+case "$1" in
+    -A|--android-server)
+    systemctl -l status salarm_android_server.service
+    shift
+    ;;
+    -M|--mail-server)
+    systemctl -l status salarm_mail_server.service
+    shift
+    ;;
+    -a|--all)
+    systemctl status salarm_mail_server.service
+    systemctl status salarm_android_server.service
+    shift
+    ;;
+    -h|--help)
+    echo "$cmd_name [-a|--all] [-A|--android-server] [-M|--mail-server] [-h|--help]"
+    exit 0
+    ;;
+    *)
+    break
+    ;;
+esac
+done
+
+
