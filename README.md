@@ -1,2 +1,2 @@
 # smart_alarm
-Route NVR video surveillance SMTP emails to SMS, Whatsapp, Signal, Telegram
+Route NVR video surveillance SMTP emails to SMS, Signal, Telegram
