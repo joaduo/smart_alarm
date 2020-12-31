@@ -8,8 +8,8 @@ import smtplib
 from email.message import EmailMessage
 
 
-def complex_email():
-    server = smtplib.SMTP('127.0.0.1', 1025)
+def complex_email(address):
+    server = smtplib.SMTP(address, 1025)
     server.set_debuglevel(True)  # show communication with the server
     try:
         with open('email.example.txt') as fp:
@@ -19,12 +19,12 @@ def complex_email():
     finally:
         server.quit()
 
-def simple():
+def simple(address):
     msg = EmailMessage()
     msg['Subject'] = 'Subject'
     msg['From'] = 'me'
     msg['To'] = 'you'
-    s = smtplib.SMTP('127.0.0.1', 1025)
+    s = smtplib.SMTP(address, 1025)
     s.set_debuglevel(True)
     try:
         s.send_message(msg)
@@ -33,5 +33,6 @@ def simple():
 
 
 if __name__ == '__main__':
-    simple()
-    complex_email()
+    address = '127.0.0.1'
+    simple(address)
+    complex_email(address)
