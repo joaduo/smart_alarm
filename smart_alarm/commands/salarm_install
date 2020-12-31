@@ -120,9 +120,9 @@ WantedBy=multi-user.target
     echo "Creating $fpath..."
     echo "$fcontents" > $fpath
 
-    exec_cmd systemctl daemon-reload && \
-    exec_cmd systemctl enable salarm_android_server.service && \
-    exec_cmd systemctl start salarm_android_server.service && \
+    exec_cmd sudo systemctl daemon-reload && \
+    exec_cmd sudo systemctl enable salarm_android_server.service && \
+    exec_cmd sudo systemctl start salarm_android_server.service && \
     systemctl status salarm_android_server.service
 }
 
@@ -147,9 +147,9 @@ WantedBy=multi-user.target
     echo "Creating $fpath..."
     echo "$fcontents" > $fpath
 
-    exec_cmd systemctl daemon-reload && \
-    exec_cmd systemctl enable salarm_mail_server.service && \
-    exec_cmd systemctl start salarm_mail_server.service && \
+    exec_cmd sudo systemctl daemon-reload && \
+    exec_cmd sudo systemctl enable salarm_mail_server.service && \
+    exec_cmd sudo systemctl start salarm_mail_server.service && \
     systemctl status salarm_mail_server.service
 }
 

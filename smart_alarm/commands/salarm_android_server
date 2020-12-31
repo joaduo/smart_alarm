@@ -3,9 +3,16 @@
 # Copyright (c) 2020, Joaquin G. Duo
 # Code Licensed under LGPL License. See LICENSE file.
 
+conf_file=/etc/salarm_android_server.conf
+
+if [[ -e $conf_file ]];then
+  source $conf_file
+fi
+
 ANDROID_AUTH_TOKEN=${ANDROID_AUTH_TOKEN}
 ANDROID_SERVER_METHODS=${ANDROID_SERVER_METHODS:-""}
-PORT=8000
+ANDROID_SERVER_PORT=${ANDROID_SERVER_PORT:-8000}
+ANDROID_SERVER_LISTEN=${ANDROID_SERVER_LISTEN:-127.0.0.1}
 
 TEMP_DIR=${TEMP_DIR:-$HOME}
 LOG_FILE=$TEMP_DIR/$(basename $0).log
@@ -69,9 +76,9 @@ function init_server(){
 }
 
 if init_server ;then
-    echo adb forward tcp:$PORT tcp:$PORT "#Forwarding port"
-    adb forward tcp:$PORT tcp:$PORT
-    salarm_android_python $server_file --adb --listen 127.0.0.1 --port $PORT --token "'$ANDROID_AUTH_TOKEN'" --methods "'$ANDROID_SERVER_METHODS'"
+    echo adb forward tcp:$ANDROID_SERVER_PORT tcp:$ANDROID_SERVER_PORT "#Forwarding port"
+    adb forward tcp:$ANDROID_SERVER_PORT tcp:$ANDROID_SERVER_PORT
+    salarm_android_python $server_file --adb --listen $ANDROID_SERVER_LISTEN --port $ANDROID_SERVER_PORT --token "'$ANDROID_AUTH_TOKEN'" --methods "'$ANDROID_SERVER_METHODS'"
 else
     exit 1
 fi

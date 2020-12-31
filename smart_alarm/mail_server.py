@@ -27,7 +27,7 @@ MAIL_LISTEN_PORT = int(os.environ.get('MAIL_LISTEN_PORT', '1025'))
 
 NOTIFICATION_TEMPLATE = os.environ.get('NOTIFICATION_TEMPLATE', 'Alarm in {title} {timestamp}.')
 
-NAME_CHANNEL = dict(Garage=2, Jardin=1, Cocina_Arriba=3)
+MAIL_NVR_CHANNELS=eval(os.environ.get('MAIL_NVR_CHANNELS', '""')) or dict(Garage=2, Garden=1)
 
 
 def f(fmt_string):
@@ -64,7 +64,7 @@ class CustomSMTPServer(smtpd.SMTPServer):
         return em.get_payload()
 
     def process_msg(self, msg):
-        channel_name = {v:k for k,v in NAME_CHANNEL.items()}
+        channel_name = {v:k for k,v in MAIL_NVR_CHANNELS.items()}
         if 'detected motion alarm' in msg:
             # 'This is a NVR alarm mail:FN3108XE channel:2 detected motion alarm at 2020-12-21 02:01:38 \n'
             m = re.search('channel:([0-9]+\s).*\s([0-9\-]+\s[0-9:]+)\s', msg)

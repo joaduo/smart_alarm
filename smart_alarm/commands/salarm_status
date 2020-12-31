@@ -25,6 +25,9 @@ Controlling:
     sudo systemctl start salarm_android_server.service
     sudo systemctl start salarm_mail_server.service
 
+    sudo systemctl restart salarm_android_server.service
+    sudo systemctl restart salarm_mail_server.service
+    
     sudo systemctl stop salarm_android_server.service
     sudo systemctl stop salarm_mail_server.service
 "
