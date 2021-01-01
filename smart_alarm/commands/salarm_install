@@ -105,6 +105,8 @@ function install_android_server(){
     local fcontents="[Unit]
 Description=Smart Alarm Android Server
 After=network.target
+RestartSec=10
+StartLimitBurst=10000
 
 [Service]
 ExecStart=$execpath
@@ -122,7 +124,7 @@ WantedBy=multi-user.target
 
     exec_cmd sudo systemctl daemon-reload && \
     exec_cmd sudo systemctl enable salarm_android_server.service && \
-    exec_cmd sudo systemctl start salarm_android_server.service && \
+    exec_cmd sudo systemctl restart salarm_android_server.service && \
     systemctl status salarm_android_server.service
 }
 
@@ -132,6 +134,8 @@ function install_mail_server(){
     local fcontents="[Unit]
 Description=Smart Alarm Mail server
 After=network.target
+RestartSec=5
+StartLimitBurst=10000
 
 [Service]
 ExecStart=/usr/local/bin/salarm_mail_server
@@ -149,7 +153,7 @@ WantedBy=multi-user.target
 
     exec_cmd sudo systemctl daemon-reload && \
     exec_cmd sudo systemctl enable salarm_mail_server.service && \
-    exec_cmd sudo systemctl start salarm_mail_server.service && \
+    exec_cmd sudo systemctl restart salarm_mail_server.service && \
     systemctl status salarm_mail_server.service
 }
 
