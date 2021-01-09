@@ -34,15 +34,12 @@ ANDROID_SERVER_METHODS= os.environ.get('ANDROID_SERVER_METHODS', 'print_msg')
 
 
 class Commands:
-    def call_method(self, method, args=tuple(), kwargs=None):
-        kwargs = kwargs or {}
-        droid = androidhelper.Android()
-        meth = getattr(droid, method)
-        return self._to_dict(meth(*args, **kwargs))
-
     def __getattr__(self, name):
-        droid = androidhelper.Android()
-        return getattr(droid, name)
+        def method(*args, **kwargs):
+            droid = androidhelper.Android()
+            meth = getattr(droid, method)
+            return self._to_dict(meth(*args, **kwargs))
+        return method
 
     def sms_send(self, phone, msg):
         droid = androidhelper.Android()
