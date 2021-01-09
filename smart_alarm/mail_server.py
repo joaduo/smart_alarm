@@ -12,15 +12,14 @@ import email
 import logging
 import re
 import os
-import inspect
 
 
 logger = logging.getLogger('mail_server')
 
-ALARM_NOTIFIED_PHONES = [p.strip() for p in os.environ.get('ALARM_NOTIFIED_PHONES', '').split(',') if p.strip()]
-ANDROID_SERVER = os.environ.get('ANDROID_SERVER', '127.0.0.1')
-ANDROID_SERVER_PORT = int(os.environ.get('ANDROID_SERVER_PORT', '8000'))
-ANDROID_AUTH_TOKEN= os.environ.get('ANDROID_AUTH_TOKEN', '')
+
+CMDS_SERVER = os.environ.get('CMDS_SERVER', '127.0.0.1')
+CMDS_SERVER_PORT = int(os.environ.get('CMDS_SERVER_PORT', '8000'))
+CMDS_AUTH_TOKEN= os.environ.get('CMDS_AUTH_TOKEN')
 
 MAIL_LISTEN_ADDRESS = os.environ.get('MAIL_LISTEN_ADDRESS', '127.0.0.1')
 MAIL_LISTEN_PORT = int(os.environ.get('MAIL_LISTEN_PORT', '1025'))
@@ -30,28 +29,19 @@ NOTIFICATION_TEMPLATE = os.environ.get('NOTIFICATION_TEMPLATE', 'Alarm in {title
 MAIL_NVR_CHANNELS=eval(os.environ.get('MAIL_NVR_CHANNELS', '""')) or dict(Garage=2, Garden=1)
 
 
-def f(fmt_string):
-    frame = inspect.currentframe()
-    fvars = frame.f_back.f_globals.copy()
-    fvars.update(frame.f_back.f_locals)
-    try:
-        return fmt_string.format(**fvars)
-    finally:
-        del frame
-
-
 class CustomSMTPServer(smtpd.SMTPServer):
-    def sms_send(self, phone, msg):
-        url = f('http://{ANDROID_SERVER}:{ANDROID_SERVER_PORT}') 
-        json = {'method':'sms_send',
-                'kwargs':{'phone':phone, 'msg':msg},
-                'auth_token': ANDROID_AUTH_TOKEN}
+    def sms_send(self, msg):
+        url = f'http://{CMDS_SERVER}:{CMDS_SERVER_PORT}/alarm/notification/' 
+        json = {'msg_from':'smart_alarm.mail_server',
+                'msg_type':'SMS',
+                'msg':msg,
+                'auth_token': CMDS_AUTH_TOKEN}
         try:
             r = requests.post(url, json=json)
-            logger.info(f('Got {r.json()} for {msg!r} to {phone}'))
+            logger.info(f'Got {r} for {msg!r}')
             return r.json()
         except Exception:
-            logging.exception(f('While sending {msg!r} to {phone}'))
+            logging.exception(f'While sending {msg!r}')
 
     def extract_msg(self, data):
         if isinstance(data, str):
@@ -77,9 +67,9 @@ class CustomSMTPServer(smtpd.SMTPServer):
     count = 0
     def dump_email(self, data):
         self.count += 1
-        fname = f('/tmp/smart_alarm_email.{self.count}.txt')
+        fname = f'/tmp/smart_alarm_email.{self.count}.txt'
         with open(fname, 'wb') as fp:
-            logger.info(f('Saving {fname}...'))
+            logger.info(f'Saving {fname}...')
             fp.write(data)
 
     def process_message(self, peer, mailfrom, rcpttos, data, **options):
@@ -88,15 +78,11 @@ class CustomSMTPServer(smtpd.SMTPServer):
         msg = self.extract_msg(data)
         msg = self.process_msg(msg)
         logger.info('Message msg: %s', msg)    
-        for p in ALARM_NOTIFIED_PHONES:
-            self.sms_send(p, msg)
-            if 'This is a test mail send by your NVR' in msg:
-                break
-        #self.dump_email(data)
+        self.sms_send(msg)
 
 
 def main():
-    global MAIL_LISTEN_ADDRESS, MAIL_LISTEN_PORT, ANDROID_AUTH_TOKEN
+    global MAIL_LISTEN_ADDRESS, MAIL_LISTEN_PORT, CMDS_AUTH_TOKEN
     logging.basicConfig()
     logger.setLevel(logging.INFO)
     parser = argparse.ArgumentParser(description='Custom SMTP server')
@@ -116,15 +102,15 @@ def main():
     parser.add_argument(
         '-t',
         '--token',
-        default=ANDROID_AUTH_TOKEN,
+        default=CMDS_AUTH_TOKEN,
         help='Authentication secret token',
     )
     args = parser.parse_args()
     MAIL_LISTEN_ADDRESS = args.listen
     MAIL_LISTEN_PORT = args.port
-    ANDROID_AUTH_TOKEN = args.token
+    CMDS_AUTH_TOKEN = args.token
     _ = CustomSMTPServer((MAIL_LISTEN_ADDRESS, MAIL_LISTEN_PORT), None)
-    logger.info(f('Starting Mail server at smtp://{MAIL_LISTEN_ADDRESS}:{MAIL_LISTEN_PORT}'))
+    logger.info(f'Starting Mail server at smtp://{MAIL_LISTEN_ADDRESS}:{MAIL_LISTEN_PORT}')
     asyncore.loop()
 
 
