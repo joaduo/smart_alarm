@@ -28,8 +28,8 @@ logger = logging.getLogger('android_server')
 
 # Defaults are used for printing messages on the phoe screen
 ANDROID_SERVER = os.environ.get('ANDROID_SERVER', '127.0.0.1')
-ANDROID_SERVER_PORT = int(os.environ.get('ANDROID_SERVER_PORT', '8001'))
-ANDROID_AUTH_TOKEN= os.environ.get('ANDROID_AUTH_TOKEN', '')
+ANDROID_SERVER_PORT = int(os.environ.get('ANDROID_SERVER_PORT', '8100'))
+ANDROID_AUTH_TOKEN= os.environ.get('ANDROID_AUTH_TOKEN')
 ANDROID_SERVER_METHODS= os.environ.get('ANDROID_SERVER_METHODS', 'print_msg')
 
 
