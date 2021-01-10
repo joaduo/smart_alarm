@@ -3,7 +3,7 @@
 # Copyright (c) 2020, Joaquin G. Duo
 # Code Licensed under LGPL License. See LICENSE file.
 
-conf_file=/etc/salarm_mail_server.conf
+conf_file=/etc/salarm/mail_server.conf
 
 if [[ -e $conf_file ]];then
   source $conf_file

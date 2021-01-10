@@ -11,9 +11,12 @@ DEPLOY_ANDROID_SDCARD_DIR=${DEPLOY_ANDROID_SDCARD_DIR:-/sdcard}
 DEPLOY_ANDROID_DOWNLOAD_DIR=${DEPLOY_ANDROID_DOWNLOAD_DIR:-$DEPLOY_ANDROID_SDCARD_DIR/Download}
 DEPLOY_ANDROID_REINSTALL=${DEPLOY_ANDROID_REINSTALL}
 DEPLOY_ANDROID_DEBUG=${DEPLOY_ANDROID_DEBUG:-1}
-TEMP_DIR=${TEMP_DIR:-$HOME}
+TEMP_DIR=${TEMP_DIR:-/var/salarm}
 
 LOG_FILE=$TEMP_DIR/$cmd_name.log
+
+WORKING_DIR=/var/salarm
+SERVICE_USER=salarm
 
 function ask_variable(){
     local var_name=$1
@@ -61,6 +64,12 @@ function exec_cmd(){
     return $ret
 }
 
+function create_system_user(){
+  useradd -r $SERVICE_USER
+  mkdir -p $WORKING_DIR/static
+  chown salarm:salarm -R $WORKING_DIR
+}
+
 function install_pkg(){
   if [[ $(adb shell ls -d $DEPLOY_ANDROID_DOWNLOAD_DIR) == *"No such file or directory"* ]]; then
     echo "Directory $DEPLOY_ANDROID_DOWNLOAD_DIR does not exist on android device, please specify it via DEPLOY_ANDROID_DOWNLOAD_DIR env var"
@@ -99,7 +108,7 @@ function install_pkg(){
 
 function install_android_server(){
     echo "Installing android server...."
-    local execpath=/usr/local/bin/salarm_android_server
+    local execpath=salarm_android_server
     $execpath --deploy
     local fpath=/etc/systemd/system/salarm_android_server.service
     local fcontents="[Unit]
@@ -110,11 +119,11 @@ StartLimitBurst=10000
 
 [Service]
 ExecStart=$execpath
-WorkingDirectory=/home/pi
+WorkingDirectory=$WORKING_DIR
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=pi
+User=$SERVICE_USER
 
 [Install]
 WantedBy=multi-user.target
@@ -128,8 +137,37 @@ WantedBy=multi-user.target
     systemctl status salarm_android_server.service
 }
 
+function install_cmds_server(){
+    echo "Installing cmds server...."
+    local fpath=/etc/systemd/system/salarm_cmds_server.service
+    local fcontents="[Unit]
+Description=Smart Alarm Cmds server
+After=network.target
+RestartSec=5
+StartLimitBurst=10000
+
+[Service]
+ExecStart=salarm_cmds_server
+WorkingDirectory=$WORKING_DIR
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=$SERVICE_USER
+
+[Install]
+WantedBy=multi-user.target
+"
+    echo "Creating $fpath..."
+    echo "$fcontents" > $fpath
+
+    exec_cmd sudo systemctl daemon-reload && \
+    exec_cmd sudo systemctl enable salarm_cmds_server.service && \
+    exec_cmd sudo systemctl restart salarm_cmds_server.service && \
+    systemctl status salarm_cmds_server.service
+}
+
 function install_mail_server(){
-    echo "Installing mail server...."  
+    echo "Installing mail server...."
     local fpath=/etc/systemd/system/salarm_mail_server.service
     local fcontents="[Unit]
 Description=Smart Alarm Mail server
@@ -138,12 +176,12 @@ RestartSec=5
 StartLimitBurst=10000
 
 [Service]
-ExecStart=/usr/local/bin/salarm_mail_server
-WorkingDirectory=/home/pi
+ExecStart=salarm_mail_server
+WorkingDirectory=$WORKING_DIR
 StandardOutput=inherit
 StandardError=inherit
 Restart=always
-User=pi
+User=$SERVICE_USER
 
 [Install]
 WantedBy=multi-user.target
@@ -164,6 +202,10 @@ case "$1" in
     VERBOSE=1
     shift
     ;;
+    -U|--user)
+    create_system_user
+    shift
+    ;;
     -P|--package)
     install_pkg
     shift
@@ -172,16 +214,20 @@ case "$1" in
     install_android_server
     shift
     ;;
+    -C|--cmds-server)
+    install_cmds_server
+    shift
+    ;;
     -M|--mail-server)
     install_mail_server
     shift
     ;;
     -a|--all)
-    install_pkg && install_android_server && install_mail_server
+    create_system_user && install_pkg && install_android_server && install_android_server && install_mail_server
     shift
     ;;
     -h|--help)
-    echo "$cmd_name [--all] [-P|--package] [-A|--android-server] [-M|--mail-server] [-v|--verbose] [-h|--help]"
+    echo "$cmd_name [--all] [-U|--user] [-P|--package] [-A|--android-server] [-C|--cmds-server] [-M|--mail-server] [-v|--verbose] [-h|--help]"
     exit 0
     ;;
     *)

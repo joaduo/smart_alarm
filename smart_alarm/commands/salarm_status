@@ -6,16 +6,21 @@
 while test $# -gt 0; do
 case "$1" in
     -A|--android-server)
-    systemctl -l status salarm_android_server.service
+    journalctl -u salarm_android_server.service -b
+    shift
+    ;;
+    -C|--cmds-server)
+    journalctl -u salarm_cmds_server.service -b
     shift
     ;;
     -M|--mail-server)
-    systemctl -l status salarm_mail_server.service
+    journalctl -u salarm_mail_server.service -b
     shift
     ;;
     -a|--all)
-    systemctl status salarm_mail_server.service
     systemctl status salarm_android_server.service
+    systemctl status salarm_cmds_server.service
+    systemctl status salarm_mail_server.service
     shift
     ;;
     -h|--help)
@@ -23,12 +28,15 @@ case "$1" in
     echo "
 Controlling:
     sudo systemctl start salarm_android_server.service
+    sudo systemctl start salarm_cmds_server.service
     sudo systemctl start salarm_mail_server.service
 
     sudo systemctl restart salarm_android_server.service
+    sudo systemctl restart salarm_cmds_server.service
     sudo systemctl restart salarm_mail_server.service
     
     sudo systemctl stop salarm_android_server.service
+    sudo systemctl stop salarm_cmds_server.service
     sudo systemctl stop salarm_mail_server.service
 "
     exit 0

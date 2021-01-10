@@ -3,7 +3,7 @@
 # Copyright (c) 2020, Joaquin G. Duo
 # Code Licensed under LGPL License. See LICENSE file.
 
-conf_file=/etc/salarm_android_server.conf
+conf_file=/etc/salarm/android_server.conf
 
 if [[ -e $conf_file ]];then
   source $conf_file
@@ -14,7 +14,7 @@ ANDROID_SERVER_METHODS=${ANDROID_SERVER_METHODS:-""}
 ANDROID_SERVER_PORT=${ANDROID_SERVER_PORT:-8001}
 ANDROID_SERVER_LISTEN=${ANDROID_SERVER_LISTEN:-127.0.0.1}
 
-TEMP_DIR=${TEMP_DIR:-$HOME}
+TEMP_DIR=${TEMP_DIR:-/var/salarm}
 LOG_FILE=$TEMP_DIR/$(basename $0).log
 
 function exec_cmd(){
