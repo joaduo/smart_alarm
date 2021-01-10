@@ -1,0 +1,12 @@
+#!/bin/bash
+# smart_alarm
+# Copyright (c) 2020, Joaquin G. Duo
+# Code Licensed under LGPL License. See LICENSE file.
+
+conf_file=/etc/salarm/cmds_server.conf
+
+if [[ -e $conf_file ]];then
+  source $conf_file
+fi
+
+python3 -m smart_alarm.cmds_server
