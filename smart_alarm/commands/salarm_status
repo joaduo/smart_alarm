@@ -27,9 +27,9 @@ case "$1" in
     echo "$cmd_name [-a|--all] [-A|--android-server] [-M|--mail-server] [-h|--help]"
     echo "
 Controlling:
-    sudo systemctl start salarm_android_server.service
-    sudo systemctl start salarm_cmds_server.service
-    sudo systemctl start salarm_mail_server.service
+    sudo systemctl status salarm_android_server.service
+    sudo systemctl status salarm_cmds_server.service
+    sudo systemctl status salarm_mail_server.service
 
     sudo systemctl restart salarm_android_server.service
     sudo systemctl restart salarm_cmds_server.service
