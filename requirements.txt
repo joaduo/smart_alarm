@@ -1,0 +1,7 @@
+fastapi
+python-jose[cryptography]
+passlib[bcrypt]
+uvicorn[standard]
+fastapi-utils
+python-multipart
+#aiofiles
