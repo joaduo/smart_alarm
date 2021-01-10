@@ -10,19 +10,19 @@ Code Licensed under LGPL License. See LICENSE file.
 import six
 import argparse
 import sys
+import socket
+import json
+import pydoc
+import logging
+import os
 if six.PY3:
     from http.server import HTTPServer, BaseHTTPRequestHandler
     import html
 else:
     import cgi as html
     from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-import json
-import pydoc
 
-import logging
 import androidhelper
-import os
-
 
 logger = logging.getLogger('android_server')
 
@@ -37,7 +37,7 @@ class Commands:
     def __getattr__(self, name):
         def method(*args, **kwargs):
             droid = androidhelper.Android()
-            meth = getattr(droid, method)
+            meth = getattr(droid, name)
             return self._to_dict(meth(*args, **kwargs))
         return method
 
@@ -153,6 +153,7 @@ curl -d '{"method":"print_msg", "kwargs":{"msg":"Log output", "std":"err", "colo
                 self._send_json(error='Missing args')
 
     def _serve_method(self, data):
+        connection_refused = False
         name = data.get('method')
         method = getattr(Commands(), name, None)
         if method and ANDROID_SERVER_METHODS and name not in ANDROID_SERVER_METHODS:
@@ -167,13 +168,22 @@ curl -d '{"method":"print_msg", "kwargs":{"msg":"Log output", "std":"err", "colo
                 json = self._json(rpc_result=method(*args, **kwargs))
                 self._set_headers()
             except Exception as e:
+                if isinstance(e, socket.error) and str(e) == '[Errno 111] Connection refused':
+                    connection_refused = True
                 logger.exception('While serving %s', name)
-                json = self._json(error='Executing %s got exception %s %r' % (method, e, e))
+                json = self._json(error='Executing %s got exception %s %r' % (name, e, e))
                 self._set_headers(500)
             self.wfile.write(json)
         else:
             self._set_headers(400)
             self._send_json(error='No such method %r' % name)
+        if connection_refused:
+            self.exit_server(e)
+
+    def exit_server(self, e):
+        logger.critical('Terminating server, we need to restart SL4A service')
+        # sys.exit is not enough
+        os._exit(1)
 
     def log_message(self, format, *args):
         if not self.ignore_logs:
@@ -186,6 +196,7 @@ def run(server_class=HTTPServer, handler_class=CustomHandler, addr='localhost', 
     httpd = server_class(server_address, handler_class)
     logging.info('Starting server http://%s:%s', addr, port)
     httpd.serve_forever()
+    logging.info('Done')
 
 
 def main():
