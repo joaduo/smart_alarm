@@ -13,6 +13,7 @@ from smart_alarm.cmds_server_helper import User, get_current_active_user, app,\
     AndroidRPC
 from fastapi_utils.tasks import repeat_every
 import json
+import uvicorn
 
 logger = logging.getLogger('cmds_server')
 logging.basicConfig()
@@ -22,13 +23,15 @@ logging.getLogger().setLevel(logging.INFO)
 def split_phones(phones_str):
     return [p.strip() for p in phones_str.split(',') if p.strip()]
 
-SMS_CHECK_SECONDS=5
+SMS_CHECK_SECONDS=int(os.environ.get('SMS_CHECK_SECONDS', '5'))
+CMDS_SERVER = os.environ.get('CMDS_SERVER', '127.0.0.1')
+CMDS_SERVER_PORT = int(os.environ.get('CMDS_SERVER_PORT', '8000'))
+CMDS_AUTH_TOKEN= os.environ.get('CMDS_AUTH_TOKEN')
 LOCAL_PHONES_PREFIX = os.environ.get('LOCAL_PHONES_PREFIX','')
 ALARM_NOTIFIED_PHONES = split_phones(os.environ.get('ALARM_NOTIFIED_PHONES', ''))
 ALARM_ADMIN_PHONES = split_phones(os.environ.get('ALARM_ADMIN_PHONES', ''))
-CMDS_AUTH_TOKEN= os.environ.get('CMDS_AUTH_TOKEN')
-assert CMDS_AUTH_TOKEN
 
+assert CMDS_AUTH_TOKEN
 
 class AlarmCfg:
     notified_phones = ALARM_NOTIFIED_PHONES
@@ -67,18 +70,18 @@ def process_cmd(msg):
     if msg.get('address') in AlarmCfg.admin_phones:
         if cmd.startswith('ON'):
             AlarmCfg.enabled = True
-            logging.info('Enabling alarm')
+            logger.info('Enabling alarm')
             reply_msg(msg, 'Alarm Enabled')
         elif cmd.startswith('OFF'):
             AlarmCfg.enabled = False
-            logging.info('Disabling alarm')
+            logger.info('Disabling alarm')
             reply_msg(msg, 'Alarm Disabled')
         elif cmd.startswith('STATUS'):
             # TODO: check if NVR + cameras are online + etc
-            logging.info('Sending status')
+            logger.info('Sending status')
             reply_msg(msg, build_status())
     else:
-        print(msg)
+        logger.info(f'Unknown command {msg}')
 
 
 def build_status():
@@ -148,3 +151,6 @@ async def alarm_status(current_user: User = Depends(get_current_active_user)):
 async def alarm_reset(current_user: User = Depends(get_current_active_user)):
     return dict(result='resetted')
 
+
+if __name__ == '__main__':
+    uvicorn.run(app, host=CMDS_SERVER, port=CMDS_SERVER_PORT, workers=1)
