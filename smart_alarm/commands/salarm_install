@@ -71,6 +71,7 @@ function create_system_user(){
 }
 
 function install_pkg(){
+  exec_cmd apt-get install adb
   if [[ $(adb shell ls -d $DEPLOY_ANDROID_DOWNLOAD_DIR) == *"No such file or directory"* ]]; then
     echo "Directory $DEPLOY_ANDROID_DOWNLOAD_DIR does not exist on android device, please specify it via DEPLOY_ANDROID_DOWNLOAD_DIR env var"
     return 1
@@ -228,6 +229,15 @@ case "$1" in
     ;;
     -h|--help)
     echo "$cmd_name [--all] [-U|--user] [-P|--package] [-A|--android-server] [-C|--cmds-server] [-M|--mail-server] [-v|--verbose] [-h|--help]"
+    echo "
+-U|--user            create 'salarm' system user and directories
+-P|--package         install adb (on ubuntu) and install android package on the connected phone (through adb)
+-A|--android-server  install systemd salarm_android_server (runs in the phone as a 'local' command through adb)
+-C|--cmds-server     install systemd salarm_cmds_server (fastapi local server)
+-M|--mail-server     install systemd salarm_email_server (SMTP local server)
+-v|--verbose         be verbose while running commands
+-h|--help            this help
+    "
     exit 0
     ;;
     *)
