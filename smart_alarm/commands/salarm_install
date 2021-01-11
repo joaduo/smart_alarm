@@ -16,6 +16,7 @@ TEMP_DIR=${TEMP_DIR:-/var/salarm}
 LOG_FILE=$TEMP_DIR/$cmd_name.log
 
 WORKING_DIR=/var/salarm
+HOME_SALARM=/home/salarm
 SERVICE_USER=salarm
 
 function ask_variable(){
@@ -66,8 +67,13 @@ function exec_cmd(){
 
 function create_system_user(){
   useradd -r $SERVICE_USER
+  #Allow salarm to access USB
+  usermod -a -G plugdev salarm
   mkdir -p $WORKING_DIR/static
   chown salarm:salarm -R $WORKING_DIR
+  #adb wants a /home/<user> folder
+  mkdir -p $HOME_SALARM
+  chown salarm:salarm -R $HOME_SALARM
 }
 
 function install_pkg(){
@@ -77,34 +83,46 @@ function install_pkg(){
     return 1
   fi
 
+  local qpython_url=https://github.com/qpython-android/qpython/releases/download/v1.4.3/qpython-app-release.apk
+  if install_apk org.qpython.qpy qpython-app-release-v1.4.3.apk $qpython_url ;then
+      exec_cmd salarm_android_python --patch-end-sh
+  fi
   
-  PKG_PATH=$TEMP_DIR/$PKG
-  if [[ ! -e $PKG_PATH ]] ; then
-      echo "Downloading package to $PKG_PATH"
-      exec_cmd wget https://github.com/qpython-android/qpython/releases/download/v1.4.3/qpython-app-release.apk -O $PKG_PATH
+  local sshd_url=http://www.galexander.org/software/simplesshd/SimpleSSHD-19.apk
+  if install_apk org.galexander.sshd SimpleSSHD-19.apk $sshd_url ;then
+      echo "NOTICE: Enter into your android device and setup SSHD (start on boot,etc) and allow su for the app if needed."
+  fi
+}
+
+function install_apk(){
+  local pkg_name=$2
+  local pkg_fname=$1
+  local apk_url=$3
+  local pkg_path=$TEMP_DIR/$pkg_fname
+  if [[ ! -e $pkg_path ]] ; then
+      echo "Downloading $apk_url to $pkg_path"
+      exec_cmd wget $apk_url -O $pkg_path
   fi
 
-  echo "Sending $PKG_PATH to android device..."
-  exec_cmd salarm_android_cp $PKG_PATH $DEPLOY_ANDROID_DOWNLOAD_DIR
+  echo "Sending $pkg_path to android device..."
+  exec_cmd salarm_android_cp $pkg_path $DEPLOY_ANDROID_DOWNLOAD_DIR
 
-  local already_installed=$(adb shell pm list packages | grep org.qpython.qpy)
-  local was_installed=0
-  local remote_path=$DEPLOY_ANDROID_DOWNLOAD_DIR/$PKG
+  local already_installed=$(adb shell pm list packages | grep $pkg_name)
+  local ret_val=1
+  local remote_path=$DEPLOY_ANDROID_DOWNLOAD_DIR/$pkg_fname
   if [[ $already_installed != "" ]] ; then
-      local reinstall=$(ask_variable DEPLOY_ANDROID_REINSTALL "Uninstall and reinstall $PKG?(y/N) " N)
+      local reinstall=$(ask_variable DEPLOY_ANDROID_REINSTALL "Uninstall and reinstall $pkg_fname?(y/N) " N)
       if [[ $reinstall == 1 ]]; then
-        echo "Reinstalling $PKG..."
-        exec_cmd adb shell pm uninstall org.qpython.qpy && \
+        echo "Reinstalling $pkg_fname..."
+        exec_cmd adb shell pm uninstall $pkg_name && \
         exec_cmd adb shell pm install $remote_path
-        was_installed=1
+        ret_val=0
       fi
   else
       exec_cmd adb shell pm install $remote_path
-      was_installed=1
+      ret_val=0
   fi
-  if [[ $was_installed == 1 ]];then
-      exec_cmd salarm_android_python --patch-end-sh
-  fi
+  return $ret_val
 }
 
 function install_android_server(){
