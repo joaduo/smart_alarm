@@ -7,94 +7,25 @@ Code Licensed under LGPL License. See LICENSE file.
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
-import os
 import logging
 from smart_alarm.cmds_server_helper import User, get_current_active_user, app,\
     AndroidRPC
 from fastapi_utils.tasks import repeat_every
 import json
 import uvicorn
-import re
-from smart_alarm.cmds_commands import network_status_report
+from smart_alarm.cmds_commands import network_status_report, reboot_android
+from smart_alarm.solve_settings import solve_settings
+from smart_alarm.phone_numbers import phones_to_str, split_phones,\
+    normalize_phone, is_phone
 
 logger = logging.getLogger('cmds_server')
-logging.basicConfig()
-logging.getLogger().setLevel(logging.INFO)
 
-
-FULL_PHONE_LENGTH_WITH_PLUS = int(os.environ.get('LOCAL_PHONES_LENGTH','13')) # Eg: len(+015555551234)
-LOCAL_PHONES_PREFIX = os.environ.get('LOCAL_PHONES_PREFIX','') #Eg: '+01555'
-ALARM_PHONES_MAP = eval(os.environ.get('ALARM_PHONES_MAP', '{}'))
-def phone_to_name(phone):
-    p2n = {}
-    for n,p in ALARM_PHONES_MAP.items():
-        p = normalize_phone(str(p))
-        p2n[p] = n
-    return p2n.get(normalize_phone(phone), phone)
-
-def name_to_phone(name):
-    n2p = {}
-    for n,p in ALARM_PHONES_MAP.items():
-        p = normalize_phone(str(p))
-        n2p[n.lower()] = p
-    return n2p.get(name.lower(), name)
-
-def normalize_phone(p):
-    full = FULL_PHONE_LENGTH_WITH_PLUS
-    p = p.strip()
-    #+54 2615 9639 94
-    if len(p) < full:
-        p = LOCAL_PHONES_PREFIX[:full - len(p)] + p
-    return p
-
-def split_phones(phones_str):
-    def name2phone(ph):
-        ph = ph.strip()
-        if re.match(r'[0-9]+', ph):
-            return normalize_phone(ph)
-        else:
-            return name_to_phone(ph)
-    return set(name2phone(p) for p in phones_str.strip().split(',') if p.strip())
-
-def remove_phone_prefix(s):
-    pref = LOCAL_PHONES_PREFIX
-    if s.startswith(pref):
-        return s[len(pref):]
-    return s
-
-def phones_to_str(phone_group, names=True):
-    def beautify(ph):
-        n = phone_to_name(ph)
-        if n != ph:
-            return n
-        return remove_phone_prefix(ph)
-    return ','.join(beautify(p) for p in sorted(phone_group))
-
-
-SMS_CHECK_SECONDS=int(os.environ.get('SMS_CHECK_SECONDS', '5'))
-CMDS_SERVER = os.environ.get('CMDS_SERVER', '127.0.0.1')
-CMDS_SERVER_PORT = int(os.environ.get('CMDS_SERVER_PORT', '8000'))
-CMDS_AUTH_TOKEN= os.environ.get('CMDS_AUTH_TOKEN')
-
-ALARM_NOTIFIED_PHONES = split_phones(os.environ.get('ALARM_NOTIFIED_PHONES', ''))
-ALARM_USER_PHONES = split_phones(os.environ.get('ALARM_USER_PHONES', ''))
-ALARM_ADMIN_PHONES = split_phones(os.environ.get('ALARM_ADMIN_PHONES', ''))
-
-
-assert CMDS_AUTH_TOKEN
-
-class AlarmCfg:
-    notified_phones = ALARM_NOTIFIED_PHONES.copy()
-    user_phones = ALARM_USER_PHONES.copy()
-    admin_phones = ALARM_ADMIN_PHONES.copy()
-    sms_check_seconds = SMS_CHECK_SECONDS
-    reply_msgs = True
-
+settings = solve_settings()
 
 counter = 0
 sms_rcv = dict(msgs=[], ids=set())
 @app.on_event("startup")
-@repeat_every(seconds=SMS_CHECK_SECONDS, logger=logger, wait_first=True)
+@repeat_every(seconds=settings.sms_check_period, logger=logger, wait_first=True)
 def periodic():
     msgs = AndroidRPC().sms_get_messages(unread=True)
     if msgs.get('error'):
@@ -119,13 +50,14 @@ ON
 OFF
 STATUS'''
 ADMIN_HELP='''
-ON n
-OFF n
-ADD n
-RM n
-ADDADMIN n
-RMADMIN n
-CONFIG|CFG
+ON n|p
+OFF n|p
+ADD p
+ADDN n p
+RM n|p
+ADDADMIN n|p
+RMADMIN n|p
+CONFIG|CFG [N]umbers
 SSH All
 SSH Close
 SSH Ip
@@ -137,8 +69,8 @@ def process_cmd(msg, reply=None):
     cmd = msg.get('body')
     cmd = cmd.upper()
     from_phone = normalize_phone(msg.get('address'))
-    is_admin = from_phone in AlarmCfg.admin_phones
-    is_user = is_admin or from_phone in AlarmCfg.user_phones
+    is_admin = from_phone in settings.admins
+    is_user = is_admin or from_phone in settings.users
     if is_admin:
         admin_cmds(cmd, from_phone, msg, reply)
     if is_user:
@@ -148,7 +80,7 @@ def process_cmd(msg, reply=None):
 
 
 def reply_message(msg, reply_body):
-    if AlarmCfg.reply_msgs:
+    if settings.reply_messages:
         logger.info(f'Replying {msg} with {reply_body!r}')
         AndroidRPC().sms_send(msg['address'], reply_body)
 
@@ -158,75 +90,91 @@ def admin_cmds(cmd, from_phone, msg, reply):
     args = cmd.split(maxsplit=1)
     if match('ADDADMIN'):
         phones = split_phones(args[1])
-        AlarmCfg.admin_phones.update(phones)
-        reply(msg, f'Adding admin {phones_to_str(phones)}')
+        settings.admins.update(phones)
+        reply(msg, config_report())
     elif match('RMADMIN'):
         phones = split_phones(args[1])
-        AlarmCfg.admin_phones.difference_update(phones)
-        reply(msg, f'Removing admin {phones_to_str(phones)}')
+        settings.admins.difference_update(phones)
+        reply(msg, config_report())
+    elif match('ADDN '):
+        args = args[1].split()
+        name = args[0]
+        phone = args[1]
+        if is_phone(name):
+            name = phone
+            phone = args[0]
+        phone = normalize_phone(phone)
+        settings.users.add(phone)
+        settings.names_to_phones[name.lower()] = phone
+        reply(msg, config_report())
     elif match('ADD '):
         phones = split_phones(args[1])
-        AlarmCfg.user_phones.update(phones)
-        AlarmCfg.notified_phones.update(phones)
-        reply(msg, f'Adding user {phones_to_str(phones)}')
+        settings.users.update(phones)
+        reply(msg, config_report())
     elif match('RM '):
         phones = split_phones(args[1])
-        AlarmCfg.user_phones.difference_update(phones)
-        AlarmCfg.notified_phones.difference_update(phones)
-        reply(msg, f'Removing user {phones_to_str(phones)}')
+        settings.users.difference_update(phones)
+        settings.notified_users.difference_update(phones)
+        reply(msg, config_report())
     elif match('ON '):
         phones = split_phones(args[1])
-        phones = phones & (AlarmCfg.user_phones | AlarmCfg.admin_phones)
-        AlarmCfg.notified_phones.update(phones)
-        reply(msg, f'Notifying users {phones_to_str(phones)}')
-        reply(msg, f'Notifying users {phones}')
+        phones = phones & (settings.users | settings.admins)
+        settings.notified_users.update(phones)
+        reply(msg, config_report())
     elif match('OFF '):
         phones = split_phones(args[1])
-        phones = phones & (AlarmCfg.user_phones | AlarmCfg.admin_phones)
-        AlarmCfg.notified_phones.difference_update(phones)
-        reply(msg, f'Not notifying {phones_to_str(phones)}')
-        reply(msg, f'Notifying users {args[1]}')
-    elif match('CFG') or match('CONFIG'):
+        phones = phones & (settings.users | settings.admins)
+        settings.notified_users.difference_update(phones)
         reply(msg, config_report())
+    elif match('CFG') or match('CONFIG'):
+        as_numbers = len(args) > 1
+        reply(msg, config_report(names=not as_numbers))
     elif match('KILL ') or match('K '):
         server = args[1][0].upper()
         if server == 'A':
             r = AndroidRPC().kill_android_server()
             reply(msg, f'{r["result"].get("result") or r}')
-    elif match('SSH'):
-        ipre = r'(?:^|\b(?<!\.))(?:1?\d?\d|2[0-4]\d|25[0-5])(?:\.(?:1?\d?\d|2[0-4]\d|25[0-5])){3}(?=$|[^\w.])'
-        if match('SSH A'): # ssh all
-            pass
-        elif match('SSH C'): # ssh close
-            pass
-        elif re.search(ipre, cmd[len('SSH'):].strip()):
-            pass
+    elif match('BOOT '):
+        server = args[1][0].upper()
+        if server == 'A':
+            reply(msg, f'Rebooting android...')
+            r = reboot_android()
+        #elif server == 'C':
+        #    reply(msg, f'Killing http_server')
+#     elif match('SSH'):
+#         ipre = r'(?:^|\b(?<!\.))(?:1?\d?\d|2[0-4]\d|25[0-5])(?:\.(?:1?\d?\d|2[0-4]\d|25[0-5])){3}(?=$|[^\w.])'
+#         if match('SSH A'): # ssh all
+#             pass
+#         elif match('SSH C'): # ssh close
+#             pass
+#         elif re.search(ipre, cmd[len('SSH'):].strip()):
+#             pass
 
 
 def user_cmds(cmd, from_phone, msg, is_admin, reply):
     match = lambda exp: cmd.strip() == exp
     if match('STATUS'):
-        text = f'Notified:{from_phone in AlarmCfg.notified_phones}\n'
+        text = f'Notified:{from_phone in settings.notified_users}\n'
         text += network_status_report()
         reply(msg, text)
     elif match('ON'):
-        AlarmCfg.notified_phones.add(from_phone)
+        settings.notified_users.add(from_phone)
         reply(msg, 'Notifications ON')
     elif match('OFF'):
-        AlarmCfg.notified_phones.remove(from_phone)
+        settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
     elif match('HELP') or not is_admin:
-        # Print help if we can't match any command
+        # Print help if we can't match any user command
         if is_admin:
             reply(msg, USER_HELP + ADMIN_HELP)
         else:
             reply(msg, USER_HELP)
     
 
-def config_report():
-    admin = phones_to_str(AlarmCfg.admin_phones)
-    user = phones_to_str(AlarmCfg.user_phones)
-    notify = phones_to_str(AlarmCfg.notified_phones)
+def config_report(names=True):
+    admin = phones_to_str(settings.admins, names)
+    user = phones_to_str(settings.users, names)
+    notify = phones_to_str(settings.notified_users, names)
     return f'Admins:{admin}\nUser:{user}\nNotify:{notify}'
 
 
@@ -257,7 +205,7 @@ class Notification(BaseModel):
 notifications_recv = []
 @app.post("/alarm/notification/")
 async def alarm_notification(notification: Notification):
-    if notification.auth_token != CMDS_AUTH_TOKEN:
+    if notification.auth_token != settings.http_server_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect request token",
@@ -265,7 +213,7 @@ async def alarm_notification(notification: Notification):
     results = []
     errors = []
     notifications_recv.append(notification)
-    for p in AlarmCfg.notified_phones:
+    for p in settings.notified_users:
         r = AndroidRPC().sms_send(p, notification.msg)
         if r.get('error'):
             errors.append(r)
@@ -284,4 +232,9 @@ async def alarm_notifications(current_user: User = Depends(get_current_active_us
 
 
 if __name__ == '__main__':
-    uvicorn.run(app, host=CMDS_SERVER, port=CMDS_SERVER_PORT, workers=1)
+    logger = logging.getLogger('cmds_server')
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.INFO)
+    print(config_report())
+    uvicorn.run(app, host=settings.http_server_address,
+                port=settings.http_server_port, workers=1)

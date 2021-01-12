@@ -24,6 +24,10 @@ class DefaultSettings(BaseSettings):
         default=5,
         env_var='SMS_CHECK_SECONDS')
 
+    reply_messages = ConfigVar(
+        doc='Reply SMS messages',
+        default=True)
+
     http_server_address = ConfigVar(
         doc='Address HTTP server should listen to',
         default='127.0.0.1',
@@ -36,8 +40,10 @@ class DefaultSettings(BaseSettings):
 
     http_server_token = ConfigVar(
         doc='Authentication token',
-        default='',
-        env_var='CMDS_AUTH_TOKEN')
+        default=None,
+        env_var='CMDS_AUTH_TOKEN',
+        parser=str,
+        mandatory=True)
 
     names_to_phones = ConfigVar(
         doc='{"john":"2639230", "alice":"1234"}',
@@ -57,7 +63,7 @@ class DefaultSettings(BaseSettings):
         parser=DeferParser(phone_numbers.split_phones),
         env_var='ALARM_USER_PHONES')
 
-    users = ConfigVar(
+    admins = ConfigVar(
         doc='Admin phones or names',
         default='',
         parser=DeferParser(phone_numbers.split_phones),

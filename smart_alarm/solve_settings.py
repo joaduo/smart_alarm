@@ -31,14 +31,16 @@ class DeferValue:
 
 
 class ConfigVar(object):
-    def __init__(self, doc=None, default=None, parser=None, experimental=False, env_var=None):
+    def __init__(self, doc=None, default=None, parser=None, experimental=False, env_var=None, mandatory=False):
         self.value = default
         self.default = default
         self.parser = parser or self._solve_parser()
+        self._parsed = False
         self.name = None
         self.doc = doc
         self.experimental = experimental
         self._env_var = env_var
+        self.mandatory = mandatory
 
     @property
     def env_var(self):
@@ -46,8 +48,11 @@ class ConfigVar(object):
 
     @property
     def value(self):
-        if isinstance(self._value, DeferValue):
-            return self._value.parse()
+        if isinstance(self._value, DeferValue) and not self._parsed:
+            self._value = self._value.parse()
+            self._parsed = True
+        if self.mandatory and self._value is None:
+            raise LookupError(f'{self.name} is mandatory')
         return self._value
 
     @value.setter

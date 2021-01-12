@@ -53,6 +53,12 @@ def check_android():
     return out
 
 
+def reboot_android():
+    p, out, err = run_command('adb shell reboot -p'.split())
+    out = (out + err).decode('utf8')
+    return out
+
+
 def ping(host, timeout=2):
     """
     #https://stackoverflow.com/questions/2953462/pinging-servers-in-python
