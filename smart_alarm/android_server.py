@@ -15,6 +15,7 @@ import json
 import pydoc
 import logging
 import os
+import time
 if six.PY3:
     from http.server import HTTPServer, BaseHTTPRequestHandler
     import html
@@ -155,6 +156,12 @@ curl -d '{"method":"print_msg", "kwargs":{"msg":"Log output", "std":"err", "colo
     def _serve_method(self, data):
         connection_refused = False
         name = data.get('method')
+        if name == 'kill_android_server':
+            self._set_headers()
+            self._send_json(result='Killing in 1 sec...')
+            self.finish()
+            time.sleep(1)
+            exit_server('Someone issued the kill_android_server command')
         method = getattr(Commands(), name, None)
         if method and ANDROID_SERVER_METHODS and name not in ANDROID_SERVER_METHODS:
             self._set_headers(403)
@@ -178,16 +185,17 @@ curl -d '{"method":"print_msg", "kwargs":{"msg":"Log output", "std":"err", "colo
             self._set_headers(400)
             self._send_json(error='No such method %r' % name)
         if connection_refused:
-            self.exit_server(e)
-
-    def exit_server(self, e):
-        logger.critical('Terminating server, we need to restart SL4A service')
-        # sys.exit is not enough
-        os._exit(1)
+            exit_server('Terminating server, we need to restart SL4A service: %s' % e)
 
     def log_message(self, format, *args):
         if not self.ignore_logs:
             BaseHTTPRequestHandler.log_message(self, format, *args)
+
+
+def exit_server(msg):
+    logger.critical(msg)
+    # sys.exit is not enough
+    os._exit(1)
 
 
 def run(server_class=HTTPServer, handler_class=CustomHandler, addr='localhost', port=8000, ignore_logs=False):

@@ -21,14 +21,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 # to get a string like this run:
 # openssl rand -hex 32
-SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '1200'))
 ANDROID_SERVER = os.environ.get('ANDROID_SERVER', '127.0.0.1')
 ANDROID_SERVER_PORT = int(os.environ.get('ANDROID_SERVER_PORT', '8001'))
 ANDROID_AUTH_TOKEN= os.environ.get('ANDROID_AUTH_TOKEN')
 
-assert SECRET_KEY and ANDROID_AUTH_TOKEN
+assert JWT_SECRET_KEY and ANDROID_AUTH_TOKEN
 
 logger = logging.getLogger('cmds_server_helper')
 
@@ -99,7 +99,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -110,7 +110,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -178,6 +178,7 @@ class AndroidRPC:
                 'kwargs':kwargs,
                 'auth_token': ANDROID_AUTH_TOKEN}
         try:
+            logger.debug(f'Requesting to {url} {json}')
             r = requests.post(url, json=json)
             logger.debug(f'Got {r.json()} for {method!r} {args} {kwargs}')
             return dict(result=r.json())
