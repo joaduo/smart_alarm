@@ -34,5 +34,6 @@ def simple(address):
 
 if __name__ == '__main__':
     address = '127.0.0.1'
-    simple(address)
+    address = '192.168.200.108'
+#     simple(address)
     complex_email(address)
