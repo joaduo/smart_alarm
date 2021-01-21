@@ -14,7 +14,7 @@ from fastapi_utils.tasks import repeat_every
 import json
 import uvicorn
 from smart_alarm.cmds_commands import network_status_report, reboot_android,\
-    tempature_report, ipcam_shot_cmd
+    tempature_report, ipcam_shot_cmd, android_shot_cmd
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
@@ -147,9 +147,8 @@ def admin_cmds(cmd, from_phone, msg, reply):
             reply(msg, f'Rebooting android...')
             r = reboot_android()
         if server == 'C':
+            reply(msg, f'Killing http_server')
             os._exit(1)
-        #elif server == 'C':
-        #    reply(msg, f'Killing http_server')
 #     elif match('SSH'):
 #         ipre = r'(?:^|\b(?<!\.))(?:1?\d?\d|2[0-4]\d|25[0-5])(?:\.(?:1?\d?\d|2[0-4]\d|25[0-5])){3}(?=$|[^\w.])'
 #         if match('SSH A'): # ssh all
@@ -190,13 +189,20 @@ def user_cmds(cmd, from_phone, msg, is_admin, reply):
 def do_shots(msg, args, reply, prefix=''):
     cameras = args[1] if len(args) > 1 else None
     imgs = ipcam_shot_cmd(cameras, upload=True, prefix=prefix)
+    text = build_shot_reply(imgs)
+    imgs = android_shot_cmd(cameras, prefix=prefix)
+    text += build_shot_reply(imgs)
+    text += '\nhttps://a.jduo.de'
+    reply(msg, text)
+
+
+def build_shot_reply(imgs):
     text = ''
     for img in imgs['urls']:
         text += f'{img}\n'
     for num, error in imgs['errors']:
         text += f'{num} error:{error[:20]}\n'
-    text += '\nhttps://a.jduo.de'
-    reply(msg, text)
+    return text
 
 
 def config_report(names=True):

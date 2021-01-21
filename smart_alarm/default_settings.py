@@ -131,6 +131,15 @@ class DefaultSettings(BaseSettings):
         mandatory=True,
         env_var='USER_HASHED_PASSWORD')
 
+    temp_dir = ConfigVar(
+        doc='TEMP_DIR',
+        default='/tmp/',
+        env_var='TEMP_DIR')
+
+    android_shot_dir = ConfigVar(
+        doc='ANDROID_SHOT_DIR',
+        default='/sdcard/Download/',
+        env_var='ANDROID_SHOT_DIR')
 
 # Soon to be deprecated
 Settings = DefaultSettings

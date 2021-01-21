@@ -10,8 +10,13 @@ import logging
 import random
 import time
 
+import boto3
+from botocore.exceptions import ClientError
+
 from contextlib import contextmanager
 from smart_alarm.solve_settings import solve_settings
+from smart_alarm.cmds_server_helper import AndroidRPC
+import os
 
 logger = logging.getLogger('cmds_commands')
 settings = solve_settings()
@@ -27,6 +32,56 @@ def timer():
         d.update(end=end, delta=end-d['start'])
 
 
+def upload_file(file_name, bucket, key=None):
+    """Upload a file to an S3 bucket
+
+    :param file_name: File to upload
+    :param bucket: Bucket to upload to
+    :param object_name: S3 object name. If not specified then file_name is used
+    :return: True if file was uploaded, else False
+    """
+    # Upload the file
+    s3_client = boto3.client('s3')
+    try:
+        s3_client.upload_file(file_name, bucket, key, ExtraArgs={'ACL':'public-read',
+                                                                 'CacheControl':'private',
+                                                                 'ContentType':'image/jpeg '})
+    except ClientError as e:
+        return str(e)
+
+
+def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
+    selected = set(smart_split(cameras.lower()))
+    imgs = []
+    errors = []
+    if set(['a','and','andr']) & selected or not selected:
+        path = os.path.join(settings.android_shot_dir, f'android{prefix}.jpg')
+        with timer() as timershot:
+            resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
+            #{'result': {'rpc_result': {'error': None, 'id': 1, 'result': {'takePicture': True, 'autoFocus': False}}}}
+            result = resp['result']['rpc_result']['result']
+        if result['takePicture']:
+            local_path = os.path.join(settings.temp_dir, f'android{prefix}.jpg')
+            _, out, _ = run_command(f'adb pull {path} {local_path}'.split())
+            if '1 file pulled.' in out:
+                imgs.append((f'android{prefix}.jpg', timershot['delta']))
+                _, out, err = run_command(f'adb shell rm {path}'.split())
+                if out:
+                    errors.append(out + err)
+                if upload:
+                    err = upload_file(local_path, 'a.jduo.de', f'i/android{prefix}.jpg')
+                    if err:
+                        errors.append(err)
+            else:
+                errors.append(out + err)
+        else:
+            errors.append('Could not take picture')
+    return dict(urls=[f'https://a.jduo.de/i/{i}' for i,_ in imgs],
+                deltas=[d for _,d in imgs],
+                errors=[('and',e) for e in errors])
+
+
+
 def ipcam_shot_cmd(cameras=None, upload=False, prefix=''):
     selected = set(smart_split(cameras))
     imgs = []
@@ -40,7 +95,7 @@ def ipcam_shot_cmd(cameras=None, upload=False, prefix=''):
             with timer() as timershot:
                 error =  ipcam_shot(ip, i, upload)
             if not error:
-                imgs.append((i, timershot.get('delta')))
+                imgs.append((i, timershot['delta']))
             else:
                 errors.append((num, error))
     return dict(urls=[f'https://a.jduo.de/i/{i}' for i,_ in imgs],
@@ -68,14 +123,14 @@ def ipcam_shot(ip, shot_path, upload=False):
     logging.info(f'Running:{cmd}')
     p, out, err = run_command(cmd.split())
     if p.returncode:
-        return (out + err).decode('utf8')
+        return out + err
 
 
 def tempature_report():
     p, out, err = run_command('salarm_temperature'.split())
     if not p.returncode:
-        return out.decode('utf8').strip()
-    return (out + err).decode('utf8')
+        return out.strip()
+    return out + err
 
 
 def network_status_report(timeout=2):
@@ -118,8 +173,7 @@ def check_android():
 
 def reboot_android():
     p, out, err = run_command('adb shell reboot -p'.split())
-    out = (out + err).decode('utf8')
-    return out
+    return out + err
 
 
 def ping(host, timeout=2):
@@ -139,7 +193,7 @@ def run_command(command):
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = p.communicate()
     logger.debug('out: %r\nerr:%r', out, err)
-    return p, out, err
+    return p, out.decode('utf8'), err.decode('utf8')
 
 
 ip_servers = [

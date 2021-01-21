@@ -5,3 +5,4 @@ uvicorn[standard]
 fastapi-utils
 python-multipart
 #aiofiles
+boto3
