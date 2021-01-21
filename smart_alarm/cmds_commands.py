@@ -6,12 +6,76 @@ Code Licensed under LGPL License. See LICENSE file.
 """
 import requests
 import subprocess
-
 import logging
-import os
 import random
+import time
 
-logger = logging.getLogger('status_report')
+from contextlib import contextmanager
+from smart_alarm.solve_settings import solve_settings
+
+logger = logging.getLogger('cmds_commands')
+settings = solve_settings()
+
+
+@contextmanager
+def timer():
+    try:
+        d=dict(start=time.time())
+        yield d
+    finally:
+        end=time.time()
+        d.update(end=end, delta=end-d['start'])
+
+
+def ipcam_shot_cmd(cameras=None, upload=False, prefix=''):
+    selected = set(smart_split(cameras))
+    imgs = []
+    errors = []
+    for num, (ip, name) in settings.cameras_map.items():
+        if (not selected
+        or str(num) in selected
+        or name in selected
+        or name[0] in selected):
+            i = f'{num}_{name}{prefix}.jpg'
+            with timer() as timershot:
+                error =  ipcam_shot(ip, i, upload)
+            if not error:
+                imgs.append((i, timershot.get('delta')))
+            else:
+                errors.append(error)
+    return dict(urls=[f'https://a.jduo.de/i/{i}' for i,_ in imgs],
+                deltas=[d for _,d in imgs],
+                errors=errors)
+
+
+def smart_split(joint_str):
+    '''
+    Split string from CLI arguments. (split by spaces and/or commas)
+    So you can do
+        --words "foo bar"
+        --words foo,bar
+        --words "foo,bar baz"
+    '''
+    if not joint_str or not joint_str.strip():
+        return []
+    joint_str = joint_str.strip()
+    return [s2 for s1 in joint_str.split() for s2 in s1.split(',')]
+
+
+def ipcam_shot(ip, shot_path, upload=False):
+    upload = '1' if not upload else ''
+    cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/videoSub {shot_path} {upload}'
+    logging.info(f'Running:{cmd}')
+    p, out, err = run_command(cmd.split())
+    if p.returncode:
+        return (out + err).decode('utf8')
+
+
+def tempature_report():
+    p, out, err = run_command('salarm_temperature'.split())
+    if not p.returncode:
+        return out.decode('utf8').strip()
+    return (out + err).decode('utf8')
 
 
 def network_status_report(timeout=2):
@@ -25,10 +89,9 @@ def network_status_report(timeout=2):
     return report
 
 
-ALARM_NETWORK_PINGS = eval(os.environ.get('ALARM_NETWORK_PINGS', '{}'))
 def gather_pings(timeout=2):
     result = {}
-    for k,v in ALARM_NETWORK_PINGS.items():
+    for k,v in settings.network_pings.items():
         if isinstance(v, list):
             count = 0
             for ip in v:
@@ -106,5 +169,6 @@ if __name__ == '__main__':
 #     print(ping('192.168.2.105'))
 #     print(ping('192.168.2.4'))
     print(network_status_report())
+    print(ipcam_shot('192.168.2.2', 'test.jpg'))
 #     print(gather_pings())
 #     print(test_internet())

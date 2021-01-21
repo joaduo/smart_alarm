@@ -69,6 +69,33 @@ class DefaultSettings(BaseSettings):
         parser=DeferParser(phone_numbers.split_phones),
         env_var='ALARM_ADMIN_PHONES')
 
+    ipcam_user = ConfigVar(
+        doc='Ip Camera username',
+        default='',
+        env_var='SALARM_IPCAM_USER')
+
+    ipcam_password = ConfigVar(
+        doc='Ip Camera password',
+        default='',
+        env_var='SALARM_IPCAM_PASSWORD')
+
+    network_pings = ConfigVar(
+        doc='Network ping config',
+        default='',
+        parser=eval,
+        env_var='ALARM_NETWORK_PINGS')
+
+    cameras_map = ConfigVar(
+        doc='Network ping config',
+        default='',
+        parser=eval,
+        env_var='ALARM_CAMERAS_MAP')
+
+    split_max_sms = ConfigVar(
+        doc='Max amount of SMS to send per message',
+        default=3,
+        env_var='SALARM_SPLIT_MAX_SMS')
+
 
 # Soon to be deprecated
 Settings = DefaultSettings

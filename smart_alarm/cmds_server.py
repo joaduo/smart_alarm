@@ -13,10 +13,12 @@ from smart_alarm.cmds_server_helper import User, get_current_active_user, app,\
 from fastapi_utils.tasks import repeat_every
 import json
 import uvicorn
-from smart_alarm.cmds_commands import network_status_report, reboot_android
+from smart_alarm.cmds_commands import network_status_report, reboot_android,\
+    tempature_report, ipcam_shot_cmd
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
+import os
 
 logger = logging.getLogger('cmds_server')
 
@@ -48,7 +50,9 @@ USER_HELP='''
 HELP
 ON
 OFF
-STATUS'''
+STATUS
+SHOT c,c
+REF c,c'''
 ADMIN_HELP='''
 ON n|p
 OFF n|p
@@ -67,7 +71,6 @@ def process_cmd(msg, reply=None):
     # msg = {'read': '0', 'body': 'Tes',     '_id': '4', 'date': '1610213710004', 'address': '+1...'}
     reply = reply or reply_message
     cmd = msg.get('body')
-    cmd = cmd.upper()
     from_phone = normalize_phone(msg.get('address'))
     is_admin = from_phone in settings.admins
     is_user = is_admin or from_phone in settings.users
@@ -82,11 +85,15 @@ def process_cmd(msg, reply=None):
 def reply_message(msg, reply_body):
     if settings.reply_messages:
         logger.info(f'Replying {msg} with {reply_body!r}')
-        AndroidRPC().sms_send(msg['address'], reply_body)
+        for i in range(settings.split_max_sms):
+            part = reply_body[i*160:(i+1)*160]
+            if not part:
+                break
+            AndroidRPC().sms_send(msg['address'], reply_body)
 
 
 def admin_cmds(cmd, from_phone, msg, reply):
-    match = lambda exp: cmd.startswith(exp)
+    match = lambda exp: cmd.upper().startswith(exp)
     args = cmd.split(maxsplit=1)
     if match('ADDADMIN'):
         phones = split_phones(args[1])
@@ -139,6 +146,8 @@ def admin_cmds(cmd, from_phone, msg, reply):
         if server == 'A':
             reply(msg, f'Rebooting android...')
             r = reboot_android()
+        if server == 'C':
+            os._exit(1)
         #elif server == 'C':
         #    reply(msg, f'Killing http_server')
 #     elif match('SSH'):
@@ -152,10 +161,13 @@ def admin_cmds(cmd, from_phone, msg, reply):
 
 
 def user_cmds(cmd, from_phone, msg, is_admin, reply):
-    match = lambda exp: cmd.strip() == exp
+    cmd = cmd.strip()
+    args = cmd.split(maxsplit=1)
+    match = lambda exp: cmd.upper() == exp
     if match('STATUS'):
         text = f'Notified:{from_phone in settings.notified_users}\n'
-        text += network_status_report()
+        text += network_status_report() + '\n'
+        text += tempature_report()
         reply(msg, text)
     elif match('ON'):
         settings.notified_users.add(from_phone)
@@ -163,6 +175,26 @@ def user_cmds(cmd, from_phone, msg, is_admin, reply):
     elif match('OFF'):
         settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
+    elif cmd.upper().startswith('SH'):
+        cameras = args[1] if len(args) > 1 else None
+        imgs = ipcam_shot_cmd(cameras, upload=True)
+        text = ''
+        for img in imgs['urls']:
+            text += f'{img}\n'
+        if imgs['errors']:
+            text += f'{imgs["errors"]}'
+        text += '\nhttps://a.jduo.de'
+        reply(msg, text)
+    elif cmd.upper().startswith('REF'):
+        cameras = args[1] if len(args) > 1 else None
+        imgs = ipcam_shot_cmd(cameras, upload=True, prefix='_ref')
+        text = ''
+        for img in imgs['urls']:
+            text += f'{img}\n'
+        if imgs['errors']:
+            text += f'{imgs["errors"]}'
+        text += '\nhttps://a.jduo.de'
+        reply(msg, text)
     elif match('HELP') or not is_admin:
         # Print help if we can't match any user command
         if is_admin:
@@ -235,6 +267,6 @@ if __name__ == '__main__':
     logger = logging.getLogger('cmds_server')
     logging.basicConfig()
     logging.getLogger().setLevel(logging.INFO)
-    print(config_report())
+    logging.info(config_report())
     uvicorn.run(app, host=settings.http_server_address,
                 port=settings.http_server_port, workers=1)
