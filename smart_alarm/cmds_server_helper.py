@@ -14,31 +14,21 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
-import os
 import logging
 import requests
 from fastapi.security import OAuth2PasswordRequestForm
+from smart_alarm.solve_settings import solve_settings
 
-# to get a string like this run:
-# openssl rand -hex 32
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRE_MINUTES', '1200'))
-ANDROID_SERVER = os.environ.get('ANDROID_SERVER', '127.0.0.1')
-ANDROID_SERVER_PORT = int(os.environ.get('ANDROID_SERVER_PORT', '8001'))
-ANDROID_AUTH_TOKEN= os.environ.get('ANDROID_AUTH_TOKEN')
-
-assert JWT_SECRET_KEY and ANDROID_AUTH_TOKEN
 
 logger = logging.getLogger('cmds_server_helper')
 
+settings = solve_settings()
+
 def get_db():
-    USER_HASHED_PASSWORD = os.environ.get('USER_HASHED_PASSWORD')
-    assert USER_HASHED_PASSWORD
     fake_users_db = {
         "salarm": {
             "username": "salarm",
-            "hashed_password": USER_HASHED_PASSWORD,
+            "hashed_password": settings.user_hashed_password,
             "disabled": False,
         }
     }
@@ -99,7 +89,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     return encoded_jwt
 
 
@@ -110,7 +100,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
@@ -155,7 +145,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=settings.jwt_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
@@ -172,11 +162,11 @@ class AndroidRPC:
         return method
 
     def do_rpc(self, method, *args, **kwargs):
-        url = f'http://{ANDROID_SERVER}:{ANDROID_SERVER_PORT}' 
+        url = f'http://{settings.android_server}:{settings.android_server_port}' 
         json = {'method': method,
                 'args': args,
                 'kwargs':kwargs,
-                'auth_token': ANDROID_AUTH_TOKEN}
+                'auth_token': settings.android_auth_token}
         try:
             logger.debug(f'Requesting to {url} {json}')
             r = requests.post(url, json=json)

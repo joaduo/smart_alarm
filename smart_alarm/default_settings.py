@@ -96,6 +96,41 @@ class DefaultSettings(BaseSettings):
         default=3,
         env_var='SALARM_SPLIT_MAX_SMS')
 
+    jwt_secret_key = ConfigVar(
+        doc='JWT_SECRET_KEY use "openssl rand -hex 32"',
+        mandatory=True,
+        env_var='JWT_SECRET_KEY')
+
+    jwt_algorithm = ConfigVar(
+        doc='JWT_ALGORITHM',
+        default='HS256',
+        env_var='JWT_ALGORITHM')
+
+    jwt_token_expire_minutes = ConfigVar(
+        doc='JWT_ALGORITHM',
+        default=1200,
+        env_var='JWT_ACCESS_TOKEN_EXPIRE_MINUTES')
+
+    android_server = ConfigVar(
+        doc='ANDROID_SERVER',
+        default='127.0.0.1',
+        env_var='ANDROID_SERVER')
+
+    android_server_port = ConfigVar(
+        doc='ANDROID_SERVER_PORT',
+        default=8001,
+        env_var='ANDROID_SERVER_PORT')
+
+    android_auth_token = ConfigVar(
+        doc='ANDROID_AUTH_TOKEN',
+        mandatory=True,
+        env_var='ANDROID_AUTH_TOKEN')
+
+    user_hashed_password = ConfigVar(
+        doc='USER_HASHED_PASSWORD',
+        mandatory=True,
+        env_var='USER_HASHED_PASSWORD')
+
 
 # Soon to be deprecated
 Settings = DefaultSettings

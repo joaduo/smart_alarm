@@ -63,13 +63,15 @@ class ConfigVar(object):
         parser = type(self.default)
         if parser == bool:
             parser = eval
+        if parser == type(None):
+            parser = str
         return parser
 
     def parse(self, value_str):
         return self.parser(value_str)
 
     def copy(self, value):
-        new_cfg = ConfigVar(self.doc, self.default, self.parser, self.experimental, self._env_var)
+        new_cfg = ConfigVar(self.doc, self.default, self.parser, self.experimental, self._env_var, self.mandatory)
         new_cfg.name = self.name
         new_cfg.value = value
         return new_cfg

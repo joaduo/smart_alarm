@@ -42,7 +42,7 @@ def ipcam_shot_cmd(cameras=None, upload=False, prefix=''):
             if not error:
                 imgs.append((i, timershot.get('delta')))
             else:
-                errors.append(error)
+                errors.append((num, error))
     return dict(urls=[f'https://a.jduo.de/i/{i}' for i,_ in imgs],
                 deltas=[d for _,d in imgs],
                 errors=errors)

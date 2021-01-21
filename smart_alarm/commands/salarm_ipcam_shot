@@ -15,7 +15,7 @@ if [[ $STREAM_URL == "" ]]; then
   exit 1
 fi
 
-rm $SHOT_PATH > /dev/null
+rm -f $SHOT_PATH > /dev/null
 
 OUT_PATH=""
 if ffmpeg -stimeout 2000000 -i $STREAM_URL -f image2 -vframes 1 -pix_fmt yuvj420p $SHOT_PATH ; then

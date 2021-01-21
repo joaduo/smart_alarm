@@ -176,32 +176,28 @@ def user_cmds(cmd, from_phone, msg, is_admin, reply):
         settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
     elif cmd.upper().startswith('SH'):
-        cameras = args[1] if len(args) > 1 else None
-        imgs = ipcam_shot_cmd(cameras, upload=True)
-        text = ''
-        for img in imgs['urls']:
-            text += f'{img}\n'
-        if imgs['errors']:
-            text += f'{imgs["errors"]}'
-        text += '\nhttps://a.jduo.de'
-        reply(msg, text)
+        do_shots(msg, args, reply)
     elif cmd.upper().startswith('REF'):
-        cameras = args[1] if len(args) > 1 else None
-        imgs = ipcam_shot_cmd(cameras, upload=True, prefix='_ref')
-        text = ''
-        for img in imgs['urls']:
-            text += f'{img}\n'
-        if imgs['errors']:
-            text += f'{imgs["errors"]}'
-        text += '\nhttps://a.jduo.de'
-        reply(msg, text)
+        do_shots(msg, args, reply, prefix='_ref')
     elif match('HELP') or not is_admin:
         # Print help if we can't match any user command
         if is_admin:
             reply(msg, USER_HELP + ADMIN_HELP)
         else:
             reply(msg, USER_HELP)
-    
+
+
+def do_shots(msg, args, reply, prefix=''):
+    cameras = args[1] if len(args) > 1 else None
+    imgs = ipcam_shot_cmd(cameras, upload=True, prefix=prefix)
+    text = ''
+    for img in imgs['urls']:
+        text += f'{img}\n'
+    for num, error in imgs['errors']:
+        text += f'{num} error:{error[:20]}\n'
+    text += '\nhttps://a.jduo.de'
+    reply(msg, text)
+
 
 def config_report(names=True):
     admin = phones_to_str(settings.admins, names)
