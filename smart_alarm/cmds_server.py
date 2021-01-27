@@ -21,10 +21,11 @@ from smart_alarm.cmds_server_helper import User, get_current_active_user, app,\
     AndroidRPC
 from smart_alarm.cmds_commands import network_status_report, reboot_android,\
     tempature_report, ipcam_shot_cmd, android_shot_cmd, delete_previous_s3_files,\
-    smart_split
+    smart_split, manage_ssh, clean_ufw_status
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
+import re
 
 logger = logging.getLogger('cmds_server')
 
@@ -102,7 +103,7 @@ RM n|p
 ADDADMIN n|p
 RMADMIN n|p
 CONFIG|CFG [N]umbers
-SSH All|Close|Ip
+SSHO|C [Ip]
 KILL|K A|C|M
 '''
 def process_cmd(msg, reply=None):
@@ -128,6 +129,8 @@ def reply_message(msg, reply_body):
             part = reply_body[i*max_chars:(i+1)*max_chars]
             if not part:
                 break
+            if i:
+                time.sleep(settings.split_sms_wait_sec)
             AndroidRPC().sms_send(msg['address'], part)
 
 
@@ -184,7 +187,7 @@ def admin_cmds(cmd, from_phone, msg, reply):
         delete_previous_s3_files()
         settings.web_auth_token = secrets.token_urlsafe(settings.web_auth_token_size)
         reply(msg, f'Token rotated {build_client_url()}')
-    elif match('BOOT '):
+    elif match('KILL '):
         server = args[1][0].upper()
         if server == 'A':
             reply(msg, f'Rebooting android...')
@@ -192,14 +195,22 @@ def admin_cmds(cmd, from_phone, msg, reply):
         if server == 'C':
             reply(msg, f'Killing http_server')
             os._exit(1)
-#     elif match('SSH'):
-#         ipre = r'(?:^|\b(?<!\.))(?:1?\d?\d|2[0-4]\d|25[0-5])(?:\.(?:1?\d?\d|2[0-4]\d|25[0-5])){3}(?=$|[^\w.])'
-#         if match('SSH A'): # ssh all
-#             pass
-#         elif match('SSH C'): # ssh close
-#             pass
-#         elif re.search(ipre, cmd[len('SSH'):].strip()):
-#             pass
+    elif match('SSH'):
+        ipre = r'(?:^|\b(?<!\.))(?:1?\d?\d|2[0-4]\d|25[0-5])(?:\.(?:1?\d?\d|2[0-4]\d|25[0-5])){3}(?=$|[^\w.])'
+        valid_ip = lambda: re.search(ipre, args[1].strip()) and args[1]
+        if match('SSHO'): # ssh all
+            ip =  valid_ip() if len(args) > 1 else 'any'
+            if ip:
+                out = manage_ssh(ip, action='open')
+                reply(msg, out)
+        elif match('SSHC'): # ssh close
+            ip =  valid_ip() if len(args) > 1 else 'any'
+            if ip:
+                out = manage_ssh(ip, action='close')
+                reply(msg, out)
+        elif match('SSHS'): # Status printing
+            out = manage_ssh('any', action='status')
+            reply(msg, clean_ufw_status(out))
 
 
 def user_cmds(cmd, from_phone, msg, is_admin, reply):

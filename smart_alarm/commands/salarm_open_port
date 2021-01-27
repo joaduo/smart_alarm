@@ -1,0 +1,23 @@
+#!/bin/bash
+
+INCOMING_IP="$1"
+ACTION="$2"
+
+if [[ $INCOMING_IP == "" ]]; then
+  echo "Usage:
+  salarm_open_port <incoming ip|any>
+  
+  Allow SSH access to the server machine.
+  "
+  exit 1
+fi
+
+if [[ $ACTION == "open" ]] ; then
+  sudo ufw allow from "$INCOMING_IP" to any port 22 proto tcp comment "Smart Alarm allow incoming SSH for $INCOMING_IP"
+elif [[ $ACTION == "close" ]] ; then
+  sudo ufw delete allow from "$INCOMING_IP" to any port 22 proto tcp
+elif [[ $ACTION == "status" ]] ; then  
+  sudo ufw status
+else
+  echo "Unknown action $ACTION"
+fi

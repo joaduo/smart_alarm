@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.cmds_server_helper import AndroidRPC
 import os
+import re
 
 logger = logging.getLogger('cmds_commands')
 settings = solve_settings()
@@ -243,7 +244,42 @@ def get_myip(server, timeout=2):
     except Exception as e:
         return None
 
+
 def upload_web_client():
     path = os.path.join(os.path.dirname(__file__), 'client.html')
     logger.error(upload_file(path, 's3://a.jduo.de/w', content_type='text/html'))
+
+
+def manage_ssh(ip, action='open'):
+    _, out, err = run_command(f'sudo salarm_open_port {ip} {action}'.split())
+    return out + err
+
+
+def clean_ufw_status(out):
+    '''
+    Status: active
+    Logging: on (low)
+    Default: deny (incoming), allow (outgoing), disabled (routed)
+    New profiles: skip
+    
+    To                         Action      From
+    --                         ------      ----
+    22/tcp                     ALLOW IN    192.168.200.104            # Smart Alarm allow incoming SSH for 192.168.200.104
+    8000/tcp                   ALLOW IN    192.168.200.104            # Smart Alarm allow incoming SSH for 192.168.200.104
+    22/tcp                     ALLOW IN    Anywhere                   # Smart Alarm allow incoming SSH for any
+    22/tcp (v6)                ALLOW IN    Anywhere (v6)              # Smart Alarm allow incoming SSH for any
+    '''
+    newout = []
+    for l in out.splitlines():
+        if ('Logging:' in l
+            or 'New profiles:' in l
+            or '------' in l
+            or 'Action' in l
+            or not l.strip()):
+            continue
+        l = l.replace('Default: ','')
+        l = re.sub('\s+', ' ', l)
+        l = re.sub('#\s.*$', '', l).strip()
+        newout.append(l)
+    return '\n'.join(newout)
 

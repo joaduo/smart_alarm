@@ -111,6 +111,11 @@ class DefaultSettings(BaseSettings):
         default=150,
         env_var='SALARM_SPLIT_MAX_CHARS_PER_SMS')
 
+    split_sms_wait_sec = ConfigVar(
+        doc='Time in seconds to wait between splitted SMS',
+        default=1.5,
+        env_var='SALARM_SPLIT_WAIT_SEC')
+
     jwt_secret_key = ConfigVar(
         doc='JWT_SECRET_KEY use "openssl rand -hex 32"',
         mandatory=True,

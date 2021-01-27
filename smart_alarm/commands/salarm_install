@@ -68,12 +68,13 @@ function exec_cmd(){
 function create_system_user(){
   useradd -r $SERVICE_USER
   #Allow salarm to access USB
-  usermod -a -G plugdev salarm
+  usermod -a -G plugdev $SERVICE_USER
   mkdir -p $WORKING_DIR/static
-  chown salarm:salarm -R $WORKING_DIR
+  chown $SERVICE_USER:$SERVICE_USER -R $WORKING_DIR
   #adb wants a /home/<user> folder
   mkdir -p $HOME_SALARM
-  chown salarm:salarm -R $HOME_SALARM
+  chown $SERVICE_USER:$SERVICE_USER -R $HOME_SALARM
+  echo "salarm ALL=(ALL) NOPASSWD: $(which salarm_open_port)" > /etc/sudoers.d/010_salarm-nopasswd
 }
 
 function install_pkg(){
@@ -213,6 +214,11 @@ WantedBy=multi-user.target
     exec_cmd sudo systemctl restart salarm_mail_server.service && \
     systemctl status salarm_mail_server.service
 }
+
+if [[ $USER != "root" ]]; then
+  echo "You must run this command with sudo or as root"
+  exit 1
+fi
 
 VERBOSE=${VERBOSE:-0}
 while test $# -gt 0; do
