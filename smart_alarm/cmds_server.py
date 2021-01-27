@@ -4,21 +4,27 @@ Copyright (c) 2020, Joaquin G. Duo
 
 Code Licensed under LGPL License. See LICENSE file.
 """
-from typing import Optional
-from fastapi import Depends, HTTPException, status
-from pydantic import BaseModel
 import logging
+import os
+from typing import Optional
+import json
+from collections import defaultdict
+import time
+import secrets
+
+from pydantic import BaseModel
+import uvicorn
+from fastapi import Depends, HTTPException, status
+from fastapi_utils.tasks import repeat_every
+
 from smart_alarm.cmds_server_helper import User, get_current_active_user, app,\
     AndroidRPC
-from fastapi_utils.tasks import repeat_every
-import json
-import uvicorn
 from smart_alarm.cmds_commands import network_status_report, reboot_android,\
-    tempature_report, ipcam_shot_cmd, android_shot_cmd
+    tempature_report, ipcam_shot_cmd, android_shot_cmd, delete_previous_s3_files,\
+    smart_split
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
-import os
 
 logger = logging.getLogger('cmds_server')
 
@@ -28,8 +34,8 @@ counter = 0
 sms_rcv = dict(msgs=[], ids=set())
 @app.on_event("startup")
 @repeat_every(seconds=settings.sms_check_period, logger=logger, wait_first=True)
-def periodic():
-    msgs = AndroidRPC().sms_get_messages(unread=True)
+def periodic_sms_check():
+    msgs = AndroidRPC(max_tries=1).sms_get_messages(unread=True)
     if msgs.get('error'):
         logger.error(f'While checking incoming SMS: {msgs}')
         return
@@ -39,11 +45,45 @@ def periodic():
             new_messages.add(m['_id'])
             sms_rcv['ids'].add(m['_id'])
             sms_rcv['msgs'].append(m)
-            process_cmd(m)
+            try:
+                process_cmd(m)
+            except Exception as e:
+                logger.exception(f'While processing {m}')
+                e = str(e)[:110]
+                reply_message(m, f'Exception processing your message {e}')
     if new_messages:
         AndroidRPC().smsMarkMessageRead(list(new_messages),True)
         with open('msgs.json', 'w') as fp:
             json.dump(sms_rcv['msgs'], fp, indent=1)
+
+
+previous_report = ''
+@app.on_event("startup")
+@repeat_every(seconds=settings.status_check_period, logger=logger, wait_first=True)
+def periodic_status_check():
+    global previous_report
+    wait_sec = 5
+    report = network_status_report(timeout=wait_sec)
+    if not previous_report:
+        previous_report = report
+        return
+    if previous_report != report:
+        histogram = defaultdict(int)
+        histogram[report] += 1
+        for _ in range(settings.status_attempts - 1):
+            time.sleep(wait_sec)
+            # We don't want to check internet, ip changes from time to time
+            report = network_status_report(timeout=wait_sec, internet=False)
+            histogram[report] += 1
+        # We want the most popular report
+        report = list(sorted((count, rep) for rep,count in histogram.items()))[-1][1]
+    if previous_report != report:
+        logger.info(f'Status change, notifying {report}...')
+        for phone in settings.admins & settings.notified_users:
+            AndroidRPC().sms_send(phone, report)
+    else:
+        logger.debug('No status change')
+    previous_report = report
 
 
 USER_HELP='''
@@ -62,9 +102,7 @@ RM n|p
 ADDADMIN n|p
 RMADMIN n|p
 CONFIG|CFG [N]umbers
-SSH All
-SSH Close
-SSH Ip
+SSH All|Close|Ip
 KILL|K A|C|M
 '''
 def process_cmd(msg, reply=None):
@@ -73,7 +111,7 @@ def process_cmd(msg, reply=None):
     cmd = msg.get('body')
     from_phone = normalize_phone(msg.get('address'))
     is_admin = from_phone in settings.admins
-    is_user = is_admin or from_phone in settings.users
+    is_user = is_admin or (from_phone in settings.users)
     if is_admin:
         admin_cmds(cmd, from_phone, msg, reply)
     if is_user:
@@ -85,11 +123,12 @@ def process_cmd(msg, reply=None):
 def reply_message(msg, reply_body):
     if settings.reply_messages:
         logger.info(f'Replying {msg} with {reply_body!r}')
+        max_chars = settings.split_max_chars_per_sms
         for i in range(settings.split_max_sms):
-            part = reply_body[i*160:(i+1)*160]
+            part = reply_body[i*max_chars:(i+1)*max_chars]
             if not part:
                 break
-            AndroidRPC().sms_send(msg['address'], reply_body)
+            AndroidRPC().sms_send(msg['address'], part)
 
 
 def admin_cmds(cmd, from_phone, msg, reply):
@@ -104,7 +143,7 @@ def admin_cmds(cmd, from_phone, msg, reply):
         settings.admins.difference_update(phones)
         reply(msg, config_report())
     elif match('ADDN '):
-        args = args[1].split()
+        args = smart_split(args[1])
         name = args[0]
         phone = args[1]
         if is_phone(name):
@@ -141,6 +180,10 @@ def admin_cmds(cmd, from_phone, msg, reply):
         if server == 'A':
             r = AndroidRPC().kill_android_server()
             reply(msg, f'{r["result"].get("result") or r}')
+    elif match('PW'):
+        delete_previous_s3_files()
+        settings.web_auth_token = secrets.token_urlsafe(settings.web_auth_token_size)
+        reply(msg, f'Token rotated {build_client_url()}')
     elif match('BOOT '):
         server = args[1][0].upper()
         if server == 'A':
@@ -190,10 +233,14 @@ def do_shots(msg, args, reply, prefix=''):
     cameras = args[1] if len(args) > 1 else None
     imgs = ipcam_shot_cmd(cameras, upload=True, prefix=prefix)
     text = build_shot_reply(imgs)
-    imgs = android_shot_cmd(cameras, prefix=prefix)
+    imgs = android_shot_cmd(cameras, upload=True, prefix=prefix)
     text += build_shot_reply(imgs)
-    text += '\nhttps://a.jduo.de'
+    text += '\n' +  build_client_url()
     reply(msg, text)
+
+
+def build_client_url():
+    return f'https://{settings.s3_bucket}/w#{settings.web_auth_token}'
 
 
 def build_shot_reply(imgs):
@@ -270,5 +317,7 @@ if __name__ == '__main__':
     logging.basicConfig()
     logging.getLogger().setLevel(logging.INFO)
     logging.info(config_report())
+    settings.web_auth_token = secrets.token_urlsafe(settings.web_auth_token_size)
+    delete_previous_s3_files()
     uvicorn.run(app, host=settings.http_server_address,
                 port=settings.http_server_port, workers=1)

@@ -2,8 +2,8 @@
 
 STREAM_URL="$1"
 SHOT_PATH=${2:-./$(/bin/date '+%d-%m-%Y__%H-%M-%S').jpg}
-
-NO_S3_UPLOAD=$3
+S3_UPLOAD=$3
+S3_PATH=$4
 
 
 if [[ $STREAM_URL == "" ]]; then
@@ -19,10 +19,10 @@ rm -f $SHOT_PATH > /dev/null
 
 OUT_PATH=""
 if ffmpeg -stimeout 2000000 -i $STREAM_URL -f image2 -vframes 1 -pix_fmt yuvj420p $SHOT_PATH ; then
-  if [[ $NO_S3_UPLOAD == "" ]];then
-    if aws s3 cp $SHOT_PATH s3://a.jduo.de/i/ --acl public-read --cache-control private ; then
+  if [[ $S3_UPLOAD == "True" ]];then
+    if aws s3 cp $SHOT_PATH $S3_PATH --acl public-read --cache-control private ; then
       rm $SHOT_PATH
-      OUT_PATH="https://a.jduo.de/i/$SHOT_PATH"
+      OUT_PATH="$S3_PATH"
     fi
   else
     OUT_PATH="$SHOT_PATH"

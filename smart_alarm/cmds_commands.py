@@ -9,6 +9,7 @@ import subprocess
 import logging
 import random
 import time
+from urllib.parse import urlparse
 
 import boto3
 from botocore.exceptions import ClientError
@@ -32,7 +33,7 @@ def timer():
         d.update(end=end, delta=end-d['start'])
 
 
-def upload_file(file_name, bucket, key=None):
+def upload_file(file_name, s3_path, content_type='image/jpeg'):
     """Upload a file to an S3 bucket
 
     :param file_name: File to upload
@@ -42,41 +43,62 @@ def upload_file(file_name, bucket, key=None):
     """
     # Upload the file
     s3_client = boto3.client('s3')
+    parsed = urlparse(s3_path)
     try:
-        s3_client.upload_file(file_name, bucket, key, ExtraArgs={'ACL':'public-read',
-                                                                 'CacheControl':'private',
-                                                                 'ContentType':'image/jpeg '})
+        s3_client.upload_file(file_name, parsed.netloc, parsed.path.strip('/'),
+                              ExtraArgs={'ACL' : 'public-read',
+                                         'CacheControl' : 'private',
+                                         'ContentType' : content_type})
     except ClientError as e:
         return str(e)
 
 
+def delete_previous_s3_files():
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket(settings.s3_bucket)
+    return bucket.objects.filter(Prefix=f'i/').delete()
+
+
+def build_common_img_path(shot_path):
+    return f'{settings.s3_bucket}/i/{settings.web_auth_token}/{os.path.basename(shot_path)}'
+
+
+def build_https_img_path(shot_path):
+    return f'https://{build_common_img_path(shot_path)}'
+
+
+def build_s3_img_path(shot_path):
+    return f's3://{build_common_img_path(shot_path)}'
+
+
 def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
-    selected = set(smart_split(cameras.lower()))
+    selected = cameras and set(smart_split(cameras.lower()))
     imgs = []
     errors = []
     if set(['a','and','andr']) & selected or not selected:
-        path = os.path.join(settings.android_shot_dir, f'android{prefix}.jpg')
+        basename = f'android{prefix}.jpg'
+        path = os.path.join(settings.android_shot_dir, basename)
         with timer() as timershot:
             resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
             #{'result': {'rpc_result': {'error': None, 'id': 1, 'result': {'takePicture': True, 'autoFocus': False}}}}
             result = resp['result']['rpc_result']['result']
         if result['takePicture']:
-            local_path = os.path.join(settings.temp_dir, f'android{prefix}.jpg')
+            local_path = os.path.join(settings.temp_dir, basename)
             _, out, _ = run_command(f'adb pull {path} {local_path}'.split())
             if '1 file pulled.' in out:
-                imgs.append((f'android{prefix}.jpg', timershot['delta']))
+                imgs.append((basename, timershot['delta']))
                 _, out, err = run_command(f'adb shell rm {path}'.split())
                 if out:
                     errors.append(out + err)
                 if upload:
-                    err = upload_file(local_path, 'a.jduo.de', f'i/android{prefix}.jpg')
+                    err = upload_file(local_path, build_s3_img_path(local_path))
                     if err:
                         errors.append(err)
             else:
                 errors.append(out + err)
         else:
             errors.append('Could not take picture')
-    return dict(urls=[f'https://a.jduo.de/i/{i}' for i,_ in imgs],
+    return dict(urls=[build_https_img_path(i) for i,_ in imgs],
                 deltas=[d for _,d in imgs],
                 errors=[('and',e) for e in errors])
 
@@ -93,12 +115,12 @@ def ipcam_shot_cmd(cameras=None, upload=False, prefix=''):
         or name[0] in selected):
             i = f'{num}_{name}{prefix}.jpg'
             with timer() as timershot:
-                error =  ipcam_shot(ip, i, upload)
+                error = ipcam_shot(ip, i, upload)
             if not error:
                 imgs.append((i, timershot['delta']))
             else:
                 errors.append((num, error))
-    return dict(urls=[f'https://a.jduo.de/i/{i}' for i,_ in imgs],
+    return dict(urls=[build_https_img_path(i) for i,_ in imgs],
                 deltas=[d for _,d in imgs],
                 errors=errors)
 
@@ -118,8 +140,8 @@ def smart_split(joint_str):
 
 
 def ipcam_shot(ip, shot_path, upload=False):
-    upload = '1' if not upload else ''
-    cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/videoSub {shot_path} {upload}'
+    s3_path = build_s3_img_path(shot_path)
+    cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/videoSub {shot_path} {upload} {s3_path}'
     logging.info(f'Running:{cmd}')
     p, out, err = run_command(cmd.split())
     if p.returncode:
@@ -133,13 +155,14 @@ def tempature_report():
     return out + err
 
 
-def network_status_report(timeout=2):
+def network_status_report(timeout=2, internet=True):
     result = gather_pings(timeout)
     report = ''
     for k,v in result.items():
         report += f'{k}:{v}\n'
-    ip = test_internet(timeout) or ''
-    report += f'ip:{ip}\n'
+    if internet:
+        ip = test_internet(timeout) or ''
+        report += f'ip:{ip}\n'
     report += f'andr:' + check_android()
     return report
 
@@ -161,8 +184,7 @@ def gather_pings(timeout=2):
 def check_android():
     #https://stackoverflow.com/questions/3634041/detect-when-android-emulator-is-fully-booted
     #adb shell getprop init.svc.bootanim
-    p, out, err = run_command('adb shell getprop init.svc.bootanim'.split())
-    out = out.decode('utf8')
+    _, out, _ = run_command('adb shell getprop init.svc.bootanim'.split())
     #'running'
     if out == 'stopped\r\n':
         return 'Up'
@@ -206,9 +228,12 @@ def test_internet(timeout=2):
     servers = ip_servers.copy()
     random.shuffle(servers)
     for s in servers:
-        resp = get_myip(s, timeout)
-        if resp:
-            return resp['ip']
+        try:
+            resp = get_myip(s, timeout)
+            if resp:
+                return resp['ip']
+        except:
+            logging.exception('While getting my ip')
 
 
 def get_myip(server, timeout=2):
@@ -218,11 +243,7 @@ def get_myip(server, timeout=2):
     except Exception as e:
         return None
 
-if __name__ == '__main__':
-#     print(check_android())
-#     print(ping('192.168.2.105'))
-#     print(ping('192.168.2.4'))
-    print(network_status_report())
-    print(ipcam_shot('192.168.2.2', 'test.jpg'))
-#     print(gather_pings())
-#     print(test_internet())
+def upload_web_client():
+    path = os.path.join(os.path.dirname(__file__), 'client.html')
+    logger.error(upload_file(path, 's3://a.jduo.de/w', content_type='text/html'))
+

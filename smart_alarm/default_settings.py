@@ -24,6 +24,16 @@ class DefaultSettings(BaseSettings):
         default=5,
         env_var='SMS_CHECK_SECONDS')
 
+    status_check_period = ConfigVar(
+        doc='Period in seconds to check Network status',
+        default=60,
+        env_var='STATUS_CHECK_SECONDS')
+
+    status_attempts= ConfigVar(
+        doc='Attempts of checking status',
+        default=3,
+        env_var='STATUS_CHECK_ATTEMPTS')
+
     reply_messages = ConfigVar(
         doc='Reply SMS messages',
         default=True)
@@ -95,6 +105,11 @@ class DefaultSettings(BaseSettings):
         doc='Max amount of SMS to send per message',
         default=3,
         env_var='SALARM_SPLIT_MAX_SMS')
+    
+    split_max_chars_per_sms = ConfigVar(
+        doc='Max amount of chars to send per SMS',
+        default=150,
+        env_var='SALARM_SPLIT_MAX_CHARS_PER_SMS')
 
     jwt_secret_key = ConfigVar(
         doc='JWT_SECRET_KEY use "openssl rand -hex 32"',
@@ -140,6 +155,34 @@ class DefaultSettings(BaseSettings):
         doc='ANDROID_SHOT_DIR',
         default='/sdcard/Download/',
         env_var='ANDROID_SHOT_DIR')
+
+#     s3_images_path = ConfigVar(
+#         doc=('S3 path like s3://my.domian/folder/images/'),
+#         default='',
+#         mandatory=True,
+#         env_var='ALARM_S3_IMAGES_PATH')
+
+    s3_bucket = ConfigVar(
+        doc='',
+        default='',
+        env_var='ALARM_S3_BUCKET')
+
+#     web_client_url = ConfigVar(
+#         doc='',
+#         default='https://example/myalarm/',
+#         env_var='ALARM_WEB_CLIENT_URL')
+
+    web_auth_token = ConfigVar(
+        doc=('Unless set, it will be automatically set at startup.'
+             ' Will be used to authenticate Web Client.'),
+        default='',
+        env_var='ALARM_WEB_AUTH_TOKEN')
+
+    web_auth_token_size = ConfigVar(
+        doc='Web Auth token size in bytes.',
+        default=8,
+        env_var='ALARM_WEB_AUTH_TOKEN_SIZE')
+
 
 # Soon to be deprecated
 Settings = DefaultSettings

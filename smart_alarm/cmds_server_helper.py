@@ -18,6 +18,7 @@ import logging
 import requests
 from fastapi.security import OAuth2PasswordRequestForm
 from smart_alarm.solve_settings import solve_settings
+import time
 
 
 logger = logging.getLogger('cmds_server_helper')
@@ -118,23 +119,9 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
 
+
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-origins = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://null.jsbin.com",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -153,6 +140,10 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 
 class AndroidRPC:
+    def __init__(self, try_wait=20, max_tries=2):
+        self._try_wait = try_wait
+        self._max_tries = max_tries
+        
     def __getattr__(self, name):
         def method(*args, **kwargs):
             r = self.do_rpc(name, *args, **kwargs)
@@ -162,6 +153,9 @@ class AndroidRPC:
         return method
 
     def do_rpc(self, method, *args, **kwargs):
+        return self._do_rpc(method, args, kwargs)
+
+    def _do_rpc(self, method, args, kwargs, trynum=0):
         url = f'http://{settings.android_server}:{settings.android_server_port}' 
         json = {'method': method,
                 'args': args,
@@ -169,12 +163,17 @@ class AndroidRPC:
                 'auth_token': settings.android_auth_token}
         try:
             logger.debug(f'Requesting to {url} {json}')
-            r = requests.post(url, json=json)
+            r = requests.post(url, json=json, timeout=5)
             logger.debug(f'Got {r.json()} for {method!r} {args} {kwargs}')
             return dict(result=r.json())
         except Exception as e:
-            logger.exception(f'While RPC {method!r} {args} {kwargs}')
-            return dict(error=f'RPC {method!r} {args} {kwargs} {e} {e!r}')
+            trynum += 1
+            if trynum >= self._max_tries:
+                logging.exception(f'While RPC {method!r} {args} {kwargs}')
+                return dict(error=f'RPC {method!r} {args} {kwargs} {e} {e!r}')
+            else:
+                time.sleep(self._try_wait)
+                return self._do_rpc(method, args, kwargs, trynum)
 
     def sms_send(self, phone, msg):
         return self.do_rpc('sms_send', phone=phone, msg=msg)
