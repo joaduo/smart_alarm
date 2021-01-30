@@ -17,6 +17,10 @@ case "$1" in
     journalctl -u salarm_mail_server.service -b
     shift
     ;;
+    -I|--pir-server)
+    journalctl -u salarm_pir_server.service -b
+    shift
+    ;;
     -a|--all)
     systemctl status salarm_android_server.service
     systemctl status salarm_cmds_server.service
@@ -24,20 +28,23 @@ case "$1" in
     shift
     ;;
     -h|--help)
-    echo "$cmd_name [-a|--all] [-A|--android-server] [-M|--mail-server] [-h|--help]"
+    echo "$cmd_name [-a|--all] [-A|--android-server] [-C|--cmds-server] [-M|--mail-server] [-I|--pir-server] [-h|--help]"
     echo "
 Controlling:
     sudo systemctl status salarm_android_server.service
     sudo systemctl status salarm_cmds_server.service
     sudo systemctl status salarm_mail_server.service
+    sudo systemctl status salarm_pir_server.service
 
     sudo systemctl restart salarm_android_server.service
     sudo systemctl restart salarm_cmds_server.service
     sudo systemctl restart salarm_mail_server.service
+    sudo systemctl restart salarm_pir_server.service
     
     sudo systemctl stop salarm_android_server.service
     sudo systemctl stop salarm_cmds_server.service
     sudo systemctl stop salarm_mail_server.service
+    sudo systemctl stop salarm_pir_server.service
 "
     exit 0
     ;;

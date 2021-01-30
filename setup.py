@@ -25,7 +25,7 @@ def long_description():
 setup(
   name = name,
   packages = find_packages(),
-  version = '1.0',
+  version = '1.5',
   description = 'Smarter DVR/NVR alarms',
   long_description=long_description(),
   long_description_content_type='text/x-rst',

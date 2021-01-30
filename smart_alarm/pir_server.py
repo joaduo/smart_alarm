@@ -20,7 +20,7 @@ CMDS_SERVER_PORT = int(os.environ.get('CMDS_SERVER_PORT', '8000'))
 CMDS_AUTH_TOKEN= os.environ.get('CMDS_AUTH_TOKEN')
 
 
-def setup():
+def setup_and_run():
     # Raspberry Pi GPIO pin config
     sensor = MotionSensor(14)
     def send_notification():
@@ -40,20 +40,20 @@ def setup():
         threading.Thread(target=send_notification).start()
     def no_motion():
         logger.info('No motion.')    
-    logger.info('* Do not move, setting up the PIR sensor...')
+    logger.info('Setting up the PIR sensor...')
     sensor.wait_for_no_motion()
-    logger.info('* Device ready! ', end='', flush=True)
+    logger.info('Waiting for events!')
     sensor.when_motion = on_motion
     sensor.when_no_motion = no_motion
+    # Apparently we only need to pause the program while
+    # a thread in the back takes care of dispatching events
+    pause()
 
 
 def main():
     logging.basicConfig()
     logging.getLogger().setLevel(logging.INFO)
-    setup()
-    # Apparently we only need to pause the program while
-    # a thread in the back takes care of dispatching events
-    pause()
+    setup_and_run()
 
 
 if __name__ == '__main__':

@@ -277,18 +277,23 @@ case "$1" in
     install_mail_server
     shift
     ;;
+    -I|--pir-server)
+    install_pir_server
+    shift
+    ;;
     -a|--all)
-    create_system_user && install_pkg && install_android_server && install_android_server && install_mail_server
+    create_system_user && install_pkg && install_android_server && install_android_server && install_mail_server && install_pir_server
     shift
     ;;
     -h|--help)
-    echo "$cmd_name [--all] [-U|--user] [-P|--package] [-A|--android-server] [-C|--cmds-server] [-M|--mail-server] [-v|--verbose] [-h|--help]"
+    echo "$cmd_name [--all] [-U|--user] [-P|--package] [-A|--android-server] [-C|--cmds-server] [-M|--mail-server] [-I|--pir-server] [-v|--verbose] [-h|--help]"
     echo "
 -U|--user            create 'salarm' system user and directories
 -P|--package         install adb (on ubuntu) and install android package on the connected phone (through adb)
 -A|--android-server  install systemd salarm_android_server (runs in the phone as a 'local' command through adb)
 -C|--cmds-server     install systemd salarm_cmds_server (fastapi local server)
 -M|--mail-server     install systemd salarm_email_server (SMTP local server)
+-I|--pir-server      install systemd salarm_pir_server
 -v|--verbose         be verbose while running commands
 -h|--help            this help
     "
