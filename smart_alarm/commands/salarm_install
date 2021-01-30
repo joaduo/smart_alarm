@@ -69,6 +69,7 @@ function create_system_user(){
   useradd -r $SERVICE_USER
   #Allow salarm to access USB
   usermod -a -G plugdev $SERVICE_USER
+  usermod -a -G gpio $SERVICE_USER
   mkdir -p $WORKING_DIR/static
   chown $SERVICE_USER:$SERVICE_USER -R $WORKING_DIR
   #adb wants a /home/<user> folder
@@ -213,6 +214,35 @@ WantedBy=multi-user.target
     exec_cmd sudo systemctl enable salarm_mail_server.service && \
     exec_cmd sudo systemctl restart salarm_mail_server.service && \
     systemctl status salarm_mail_server.service
+}
+
+function install_pir_server(){
+    echo "Installing pir server...."
+    local fpath=/etc/systemd/system/salarm_pir_server.service
+    local fcontents="[Unit]
+Description=Smart Alarm Pir server
+After=network.target
+RestartSec=5
+StartLimitBurst=10000
+
+[Service]
+ExecStart=salarm_pir_server
+WorkingDirectory=$WORKING_DIR
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=$SERVICE_USER
+
+[Install]
+WantedBy=multi-user.target
+"
+    echo "Creating $fpath..."
+    echo "$fcontents" > $fpath
+
+    exec_cmd sudo systemctl daemon-reload && \
+    exec_cmd sudo systemctl enable salarm_pir_server.service && \
+    exec_cmd sudo systemctl restart salarm_pir_server.service && \
+    systemctl status salarm_pir_server.service
 }
 
 if [[ $USER != "root" ]]; then

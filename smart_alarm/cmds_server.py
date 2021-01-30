@@ -64,7 +64,7 @@ previous_report = ''
 def periodic_status_check():
     global previous_report
     wait_sec = 5
-    report = network_status_report(timeout=wait_sec)
+    report = network_status_report(timeout=wait_sec, internet=False)
     if not previous_report:
         previous_report = report
         return

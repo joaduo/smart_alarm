@@ -30,7 +30,7 @@ MAIL_NVR_CHANNELS=eval(os.environ.get('MAIL_NVR_CHANNELS', '""')) or dict(Garage
 
 
 class CustomSMTPServer(smtpd.SMTPServer):
-    def sms_send(self, msg):
+    def send_notification(self, msg):
         url = f'http://{CMDS_SERVER}:{CMDS_SERVER_PORT}/alarm/notification/' 
         json = {'msg_from':'smart_alarm.mail_server',
                 'msg_type':'SMS',
@@ -78,7 +78,7 @@ class CustomSMTPServer(smtpd.SMTPServer):
         msg = self.extract_msg(data)
         msg = self.process_msg(msg)
         logger.info('Message msg: %s', msg)    
-        self.sms_send(msg)
+        self.send_notification(msg)
 
 
 def main():
