@@ -21,7 +21,7 @@ from smart_alarm.solve_settings import solve_settings
 import time
 
 
-logger = logging.getLogger('cmds_server_helper')
+logger = logging.getLogger('cmds_server_base')
 
 settings = solve_settings()
 

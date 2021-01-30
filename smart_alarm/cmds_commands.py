@@ -16,9 +16,10 @@ from botocore.exceptions import ClientError
 
 from contextlib import contextmanager
 from smart_alarm.solve_settings import solve_settings
-from smart_alarm.cmds_server_helper import AndroidRPC
+from smart_alarm.cmds_server_base import AndroidRPC
 import os
 import re
+from smart_alarm.utils import async_thread
 
 logger = logging.getLogger('cmds_commands')
 settings = solve_settings()
@@ -72,6 +73,7 @@ def build_s3_img_path(shot_path):
     return f's3://{build_common_img_path(shot_path)}'
 
 
+@async_thread
 def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
     selected = cameras and set(smart_split(cameras.lower()))
     imgs = []
@@ -79,15 +81,14 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
     if set(['a','and','andr']) & selected or not selected:
         basename = f'android{prefix}.jpg'
         path = os.path.join(settings.android_shot_dir, basename)
-        with timer() as timershot:
-            resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
-            #{'result': {'rpc_result': {'error': None, 'id': 1, 'result': {'takePicture': True, 'autoFocus': False}}}}
-            result = resp['result']['rpc_result']['result']
+        resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
+        #{'result': {'rpc_result': {'error': None, 'id': 1, 'result': {'takePicture': True, 'autoFocus': False}}}}
+        result = resp['result']['rpc_result']['result']
         if result['takePicture']:
             local_path = os.path.join(settings.temp_dir, basename)
             _, out, _ = run_command(f'adb pull {path} {local_path}'.split())
             if '1 file pulled.' in out:
-                imgs.append((basename, timershot['delta']))
+                imgs.append(basename)
                 _, out, err = run_command(f'adb shell rm {path}'.split())
                 if out:
                     errors.append(out + err)
@@ -100,30 +101,21 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
         else:
             errors.append('Could not take picture')
     return dict(urls=[build_https_img_path(i) for i,_ in imgs],
-                deltas=[d for _,d in imgs],
-                errors=[('and',e) for e in errors])
+                errors=['Android:'+e for e in errors])
 
 
-
-def ipcam_shot_cmd(cameras=None, upload=False, prefix=''):
-    selected = set(smart_split(cameras))
-    imgs = []
-    errors = []
+def gather_ipcam_shots(cameras=None, upload=False, prefix=''):
+    selected = cameras and set(smart_split(cameras))
+    tasks = []
     for num, (ip, name) in settings.cameras_map.items():
         if (not selected
         or str(num) in selected
         or name in selected
         or name[0] in selected):
             i = f'{num}_{name}{prefix}.jpg'
-            with timer() as timershot:
-                error = ipcam_shot(ip, i, upload)
-            if not error:
-                imgs.append((i, timershot['delta']))
-            else:
-                errors.append((num, error))
-    return dict(urls=[build_https_img_path(i) for i,_ in imgs],
-                deltas=[d for _,d in imgs],
-                errors=errors)
+            t = ipcam_shot.as_task(ip, i, upload)
+            tasks.append((i, t))
+    return tasks
 
 
 def smart_split(joint_str):
@@ -140,6 +132,7 @@ def smart_split(joint_str):
     return [s2 for s1 in joint_str.split() for s2 in s1.split(',')]
 
 
+@async_thread
 def ipcam_shot(ip, shot_path, upload=False):
     s3_path = build_s3_img_path(shot_path)
     cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/videoSub {shot_path} {upload} {s3_path}'

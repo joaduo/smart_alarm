@@ -1,3 +1,12 @@
+#!/usr/bin/env python
+"""
+smart_alarm
+Copyright (c) 2020, Joaquin G. Duo
+
+Code Licensed under LGPL License. See LICENSE file.
+
+(Works on Python 2.7 too, for old Android devices)
+"""
 import androidhelper
 import logging
 

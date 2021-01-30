@@ -17,15 +17,17 @@ import uvicorn
 from fastapi import Depends, HTTPException, status
 from fastapi_utils.tasks import repeat_every
 
-from smart_alarm.cmds_server_helper import User, get_current_active_user, app,\
+from smart_alarm.cmds_server_base import User, get_current_active_user, app,\
     AndroidRPC
 from smart_alarm.cmds_commands import network_status_report, reboot_android,\
-    tempature_report, ipcam_shot_cmd, android_shot_cmd, delete_previous_s3_files,\
-    smart_split, manage_ssh, clean_ufw_status
+    tempature_report, gather_ipcam_shots, android_shot_cmd, delete_previous_s3_files,\
+    smart_split, manage_ssh, clean_ufw_status, build_https_img_path
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
 import re
+from smart_alarm.utils import async_thread
+import asyncio
 
 logger = logging.getLogger('cmds_server')
 
@@ -35,7 +37,7 @@ counter = 0
 sms_rcv = dict(msgs=[], ids=set())
 @app.on_event("startup")
 @repeat_every(seconds=settings.sms_check_period, logger=logger, wait_first=True)
-def periodic_sms_check():
+async def periodic_sms_check():
     msgs = AndroidRPC(max_tries=1).sms_get_messages(unread=True)
     if msgs.get('error'):
         logger.error(f'While checking incoming SMS: {msgs}')
@@ -47,7 +49,7 @@ def periodic_sms_check():
             sms_rcv['ids'].add(m['_id'])
             sms_rcv['msgs'].append(m)
             try:
-                process_cmd(m)
+                await process_cmd(m)
             except Exception as e:
                 logger.exception(f'While processing {m}')
                 e = str(e)[:110]
@@ -106,7 +108,7 @@ CONFIG|CFG [N]umbers
 SSHO|C [Ip]
 KILL|K A|C|M
 '''
-def process_cmd(msg, reply=None):
+async def process_cmd(msg, reply=None):
     # msg = {'read': '0', 'body': 'Tes',     '_id': '4', 'date': '1610213710004', 'address': '+1...'}
     reply = reply or reply_message
     cmd = msg.get('body')
@@ -116,7 +118,7 @@ def process_cmd(msg, reply=None):
     if is_admin:
         admin_cmds(cmd, from_phone, msg, reply)
     if is_user:
-        user_cmds(cmd, from_phone, msg, is_admin, reply)
+        await user_cmds(cmd, from_phone, msg, is_admin, reply)
     else:
         logger.info(f'Unknown sender {msg}')
 
@@ -213,7 +215,7 @@ def admin_cmds(cmd, from_phone, msg, reply):
             reply(msg, clean_ufw_status(out))
 
 
-def user_cmds(cmd, from_phone, msg, is_admin, reply):
+async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     cmd = cmd.strip()
     args = cmd.split(maxsplit=1)
     match = lambda exp: cmd.upper() == exp
@@ -229,9 +231,9 @@ def user_cmds(cmd, from_phone, msg, is_admin, reply):
         settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
     elif cmd.upper().startswith('SH'):
-        do_shots(msg, args, reply)
+        await do_shots(msg, args, reply)
     elif cmd.upper().startswith('REF'):
-        do_shots(msg, args, reply, prefix='_ref')
+        await do_shots(msg, args, reply, prefix='_ref')
     elif match('HELP') or not is_admin:
         # Print help if we can't match any user command
         if is_admin:
@@ -240,12 +242,23 @@ def user_cmds(cmd, from_phone, msg, is_admin, reply):
             reply(msg, USER_HELP)
 
 
-def do_shots(msg, args, reply, prefix=''):
+async def do_shots(msg, args, reply, prefix=''):
     cameras = args[1] if len(args) > 1 else None
-    imgs = ipcam_shot_cmd(cameras, upload=True, prefix=prefix)
-    text = build_shot_reply(imgs)
-    imgs = android_shot_cmd(cameras, upload=True, prefix=prefix)
-    text += build_shot_reply(imgs)
+    with async_thread.thread_pool(5):
+        tasks = gather_ipcam_shots(cameras, upload=True, prefix=prefix)
+        task = android_shot_cmd.as_task(cameras, upload=True, prefix=prefix)
+        newtasks = [t for _,t in tasks] + [task]
+        results = await asyncio.gather(*newtasks)
+    urls = []
+    errors = []
+    for i,e in list(zip([i for i,_ in tasks], results)):
+        if e:
+            errors.append(f'{i}:{e}')
+        else:
+            urls.append(build_https_img_path(i))
+    urls += results[-1]['urls']
+    errors += results[-1]['errors']
+    text = build_shot_reply(dict(urls=urls, errors=errors))
     text += '\n' +  build_client_url()
     reply(msg, text)
 
@@ -256,10 +269,11 @@ def build_client_url():
 
 def build_shot_reply(imgs):
     text = ''
-    for img in imgs['urls']:
-        text += f'{img}\n'
-    for num, error in imgs['errors']:
-        text += f'{num} error:{error[:20]}\n'
+    for url in imgs['urls']:
+        text += f'{url}\n'
+    for error in imgs['errors']:
+        text += f'err:{error[:50]}\n'
+        logging.error(error)
     return text
 
 
@@ -282,8 +296,8 @@ async def alarm_fakesms(sms: FakeSMS, current_user: User = Depends(get_current_a
     replies = []
     def gather_msgs(msg, reply_message):
         replies.append(reply_message)
-    process_cmd(dict(body=sms.body, address=sms.address, date=sms.date),
-                reply=gather_msgs)
+    await process_cmd(dict(body=sms.body, address=sms.address, date=sms.date),
+                      reply=gather_msgs)
     return replies
 
 
