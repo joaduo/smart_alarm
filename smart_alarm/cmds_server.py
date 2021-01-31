@@ -11,6 +11,8 @@ import json
 from collections import defaultdict
 import time
 import secrets
+import asyncio
+import re
 
 from pydantic import BaseModel
 import uvicorn
@@ -25,9 +27,7 @@ from smart_alarm.cmds_commands import network_status_report, reboot_android,\
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
-import re
 from smart_alarm.utils import async_thread
-import asyncio
 
 logger = logging.getLogger('cmds_server')
 

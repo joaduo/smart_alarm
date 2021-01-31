@@ -22,6 +22,9 @@ def blocking_io(num):
 
 
 async def main():
+    sync_r = blocking_io(0)
+    print(sync_r)
+
     with blocking_io.thread_pool(10):
         tasks = []
         for i in range(10):
