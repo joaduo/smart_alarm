@@ -14,7 +14,7 @@ class async_thread:
         self.function = function
 
     def __call__(self, *args, **kwargs):
-        return self.function(*args)
+        return self.function(*args, **kwargs)
 
     @classmethod
     def push_pool(cls, pool): 
