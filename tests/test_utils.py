@@ -1,5 +1,10 @@
+"""
+smart_alarm
+Copyright (c) 2020, Joaquin G. Duo
+
+Code Licensed under LGPL License. See LICENSE file.
+"""
 import asyncio
-import concurrent.futures
 import time
 from pprint import pprint
 from smart_alarm.utils import async_thread
@@ -42,6 +47,7 @@ async def main():
             pprint(r)
         r = await asyncio.gather(*tasks)
         pprint(r)
+
 
 if __name__ == '__main__':
     asyncio.run(main())

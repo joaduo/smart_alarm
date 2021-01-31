@@ -6,8 +6,6 @@ Code Licensed under LGPL License. See LICENSE file.
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 
 from fastapi import Depends, HTTPException, status, FastAPI
 from fastapi.security import OAuth2PasswordBearer

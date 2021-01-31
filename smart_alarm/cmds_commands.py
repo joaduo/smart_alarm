@@ -78,7 +78,7 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
     selected = cameras and set(smart_split(cameras.lower()))
     imgs = []
     errors = []
-    if set(['a','and','andr']) & selected or not selected:
+    if not selected or set(['a','and','andr']) & selected:
         basename = f'android{prefix}.jpg'
         path = os.path.join(settings.android_shot_dir, basename)
         resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
@@ -100,7 +100,7 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
                 errors.append(out + err)
         else:
             errors.append('Could not take picture')
-    return dict(urls=[build_https_img_path(i) for i,_ in imgs],
+    return dict(urls=[build_https_img_path(i) for i in imgs],
                 errors=['Android:'+e for e in errors])
 
 
@@ -134,6 +134,8 @@ def smart_split(joint_str):
 
 @async_thread
 def ipcam_shot(ip, shot_path, upload=False):
+    if not ping(ip, timeout=3): #Make sure the ip cam is up
+        return 'Ip Down'
     s3_path = build_s3_img_path(shot_path)
     cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/videoSub {shot_path} {upload} {s3_path}'
     logging.info(f'Running:{cmd}')

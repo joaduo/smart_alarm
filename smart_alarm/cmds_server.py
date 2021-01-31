@@ -63,7 +63,7 @@ async def periodic_sms_check():
 previous_report = ''
 @app.on_event("startup")
 @repeat_every(seconds=settings.status_check_period, logger=logger, wait_first=True)
-def periodic_status_check():
+async def periodic_status_check():
     global previous_report
     wait_sec = 5
     report = network_status_report(timeout=wait_sec, internet=False)
@@ -107,6 +107,7 @@ RMADMIN n|p
 CONFIG|CFG [N]umbers
 SSHO|C [Ip]
 KILL|K A|C|M
+BOOT A
 '''
 async def process_cmd(msg, reply=None):
     # msg = {'read': '0', 'body': 'Tes',     '_id': '4', 'date': '1610213710004', 'address': '+1...'}
@@ -185,18 +186,18 @@ def admin_cmds(cmd, from_phone, msg, reply):
         if server == 'A':
             r = AndroidRPC().kill_android_server()
             reply(msg, f'{r["result"].get("result") or r}')
+        if server == 'C':
+            reply(msg, f'Killing http_server')
+            os._exit(1)
     elif match('PW'):
         delete_previous_s3_files()
         settings.web_auth_token = secrets.token_urlsafe(settings.web_auth_token_size)
         reply(msg, f'Token rotated {build_client_url()}')
-    elif match('KILL '):
+    elif match('BOOT '):
         server = args[1][0].upper()
         if server == 'A':
             reply(msg, f'Rebooting android...')
             r = reboot_android()
-        if server == 'C':
-            reply(msg, f'Killing http_server')
-            os._exit(1)
     elif match('SSH'):
         ipre = r'(?:^|\b(?<!\.))(?:1?\d?\d|2[0-4]\d|25[0-5])(?:\.(?:1?\d?\d|2[0-4]\d|25[0-5])){3}(?=$|[^\w.])'
         valid_ip = lambda: re.search(ipre, args[1].strip()) and args[1]

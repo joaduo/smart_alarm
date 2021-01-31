@@ -3,8 +3,6 @@ smart_alarm
 Copyright (c) 2020, Joaquin G. Duo
 
 Code Licensed under LGPL License. See LICENSE file.
-
-(Works on Python 2.7 too, for old Android devices)
 """
 import asyncio
 import concurrent.futures
@@ -33,7 +31,7 @@ class async_thread:
 
     def as_task(self, *args, **kwargs):
         loop = asyncio.get_running_loop()
-        # run_in_executor only allow *args
+        # run_in_executor only allows *args
         return loop.run_in_executor(self.get_pool(),
                                     self._unpack_args_kwargs, args, kwargs)
 
