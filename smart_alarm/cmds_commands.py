@@ -35,7 +35,7 @@ def timer():
         d.update(end=end, delta=end-d['start'])
 
 
-def upload_file(file_name, s3_path, content_type='image/jpeg'):
+def upload_file(file_name, s3_path, content_type='image/jpeg', cache_control='private'):
     """Upload a file to an S3 bucket
 
     :param file_name: File to upload
@@ -49,7 +49,7 @@ def upload_file(file_name, s3_path, content_type='image/jpeg'):
     try:
         s3_client.upload_file(file_name, parsed.netloc, parsed.path.strip('/'),
                               ExtraArgs={'ACL' : 'public-read',
-                                         'CacheControl' : 'private',
+                                         'CacheControl' : cache_control,
                                          'ContentType' : content_type})
     except ClientError as e:
         return str(e)
@@ -103,7 +103,7 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
     return dict(imgs=imgs, errors=errors)
 
 
-def gather_ipcam_shots(cameras=None, upload=False, prefix=''):
+def gather_ipcam_shots(cameras=None, upload=False, prefix='', stream_path='videoSub'):
     selected = cameras and set(smart_split(cameras))
     tasks = []
     for num, (ip, name) in settings.cameras_map.items():
@@ -112,7 +112,7 @@ def gather_ipcam_shots(cameras=None, upload=False, prefix=''):
         or name in selected
         or name[0] in selected):
             i = f'{num}_{name}{prefix}.jpg'
-            t = ipcam_shot.as_task(ip, i, upload)
+            t = ipcam_shot.as_task(ip, i, stream_path, upload)
             tasks.append((num, t))
     return tasks
 
@@ -132,11 +132,11 @@ def smart_split(joint_str):
 
 
 @async_thread
-def ipcam_shot(ip, shot_path, upload=False):
+def ipcam_shot(ip, shot_path, stream_path, upload=False):
     if not ping(ip, timeout=3): #Make sure the ip cam is up
         return 'Ip Down'
     s3_path = build_s3_img_path(shot_path)
-    cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/videoSub {shot_path} {upload} {s3_path}'
+    cmd = f'salarm_ipcam_shot rtsp://{settings.ipcam_user}:{settings.ipcam_password}@{ip}/{stream_path} {shot_path} {upload} {s3_path}'
     logging.info(f'Running:{cmd}')
     p, out, err = run_command(cmd.split())
     if p.returncode:
@@ -241,7 +241,7 @@ def get_myip(server, timeout=2):
 
 def upload_web_client():
     path = os.path.join(os.path.dirname(__file__), 'client.html')
-    logger.error(upload_file(path, 's3://a.jduo.de/w', content_type='text/html'))
+    logger.error(upload_file(path, 's3://a.jduo.de/w', content_type='text/html', cache_control='max-age=36000'))
 
 
 def manage_ssh(ip, action='open'):

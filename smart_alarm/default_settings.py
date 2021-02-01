@@ -89,6 +89,21 @@ class DefaultSettings(BaseSettings):
         default='',
         env_var='SALARM_IPCAM_PASSWORD')
 
+    ipcam_stream_path_current = ConfigVar(
+        doc='Ip Camera stream path Eg: videoSub or videoMain',
+        default='videoSub',
+        env_var='SALARM_IPCAM_STREAM_PATH')
+
+    ipcam_stream_path_sub = ConfigVar(
+        doc='Ip Camera stream path Eg: videoSub or videoMain',
+        default='videoSub',
+        env_var='SALARM_IPCAM_STREAM_PATH_SUB')
+
+    ipcam_stream_path_hd = ConfigVar(
+        doc='Ip Camera stream path Eg: videoSub or videoMain',
+        default='videoMain',
+        env_var='SALARM_IPCAM_STREAM_PATH_HD')
+
     network_pings = ConfigVar(
         doc='Network ping config',
         default='',

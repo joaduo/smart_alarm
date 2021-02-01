@@ -219,6 +219,8 @@ def admin_cmds(cmd, from_phone, msg, reply):
 async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     cmd = cmd.strip()
     args = cmd.split(maxsplit=1)
+    cmd = args[0]
+    args = args[1].strip() if len(args) > 1 else None
     match = lambda exp: cmd.upper() == exp
     if match('STATUS'):
         text = f'Notified:{from_phone in settings.notified_users}\n'
@@ -231,6 +233,13 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     elif match('OFF'):
         settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
+    elif match('HD'):
+        if not args or args and args.upper() == 'ON':
+            settings.ipcam_stream_path_current = settings.ipcam_stream_path_hd
+            reply(msg, 'HD on')
+        else:
+            settings.ipcam_stream_path_current = settings.ipcam_stream_path_sub
+            reply(msg, 'HD off')
     elif cmd.upper().startswith('SH'):
         await do_shots(msg, args, reply)
     elif cmd.upper().startswith('REF'):
@@ -243,10 +252,9 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
             reply(msg, USER_HELP)
 
 
-async def do_shots(msg, args, reply, prefix=''):
-    cameras = args[1] if len(args) > 1 else None
+async def do_shots(msg, cameras, reply, prefix=''):
     with async_thread.thread_pool(5):
-        tasks = gather_ipcam_shots(cameras, upload=True, prefix=prefix)
+        tasks = gather_ipcam_shots(cameras, upload=True, prefix=prefix, stream_path=settings.ipcam_stream_path_current)
         task = android_shot_cmd.as_task(cameras, upload=True, prefix=prefix)
         newtasks = [t for _,t in tasks] + [task]
         results = await asyncio.gather(*newtasks)
@@ -258,7 +266,7 @@ async def do_shots(msg, args, reply, prefix=''):
             text += f'{i}:ok\n'
     if results[-1]['errors']:
         text += f'and:{str(results[-1]["errors"])[:10]}\n'
-    else:
+    elif results[-1]['imgs']:
         text += 'and:ok\n'
     reply(msg, text)
 
@@ -271,7 +279,7 @@ def config_report(names=True):
     admin = phones_to_str(settings.admins, names)
     user = phones_to_str(settings.users, names)
     notify = phones_to_str(settings.notified_users, names)
-    return f'Admins:{admin}\nUser:{user}\nNotify:{notify}'
+    return f'Admins:{admin}\nUser:{user}\nNotify:{notify}\nHD:{int(settings.ipcam_stream_path_current == settings.ipcam_stream_path_hd)}'
 
 
 class FakeSMS(BaseModel):
