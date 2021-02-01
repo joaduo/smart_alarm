@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -10,7 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/open-iconic/1.1.1/font/css/open-iconic-bootstrap.min.css" integrity="sha512-UyNhw5RNpQaCai2EdC+Js0QL4RlVmiq41DkmCJsRV3ZxipG2L0HhTqIf/H9Hp8ez2EnFlkBnjRGJU2stW3Lj+w==" crossorigin="anonymous" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js" integrity="sha512-nOQuvD9nKirvxDdvQ9OMqe2dgapbPB7vYAMrzJihw5m+aNcf0dX53m6YxM4LgA9u8e9eg9QX+/+mPu8kCNpV2A==" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.12/vue.min.js" integrity="sha512-BKbSR+cfyxLdMAsE0naLReFSLg8/pjbgfxHh/k/kUC82Hy7r6HtR5hLhobaln2gcTvzkyyehrdREdjpsQwy2Jw==" crossorigin="anonymous"></script>
-
     <style>
       .security-disc {
         text-security:disc; -webkit-text-security:disc;
@@ -26,79 +24,163 @@
         display: grid;
         height: 100%;
       }
-      .center-fit {
-        width: 95vw;
-        max-width: 1024px;
+      .center-div {
         height: auto;
         margin: auto;
       }
+      .center-fit {
+        width: 95vw;
+        max-width: 1024px;
+      }
+      .img{
+        position:relative;
+      }
+      .overimg {
+        position:absolute;
+        top:10px;
+        right:10px;
+      }
+      .img-menu{
+        position:relative;
+      }
+      .btn-primary-outline {
+        background-color: transparent;
+        border-color: #ccc;
+        color: #ccc;
+        right: 0px;
+      }
     </style>
-
   </head>
   <body>
     <div id="Cameras" class="container-fluid mt-4">
-      <div class="form-group">
-        <button class="btn btn-primary" @click="ref_on = !ref_on"
-                >{{ref_on? 'Ref': 'Shot'}}</button>
-        <span v-for="name, num in cam_map">
-          <button class="btn btn-outline-primary" @click="selected = num"
-                  >{{name}}</button>
-        </span>
-        <button class="btn btn-secondary" @click="cache_time = new Date().getTime()"
-                >Refresh</button>
+      <div class="imgbox">
+        <div class="center-div">
+          <div class="form-group">
+            <span v-for="name, num in cam_map">
+              <button class="btn btn-outline-primary" @click="select_camera(num)">{{name}}</button>
+            </span>
+            <button class="btn btn-secondary" @click="refresh_img()"><span class="oi oi-reload"></span></button>
+            <button class="btn btn-secondary" @click="copy_client_url()"><span class="oi oi-clipboard"></span></button>
+          </div>
+        </div>
       </div>
       <div v-for="name, num in cam_map">
         <div class="mt-3 imgbox" v-if="if_show_camera(num)">
-          <img :src="camera_src(num,name)" :class="cam_class[num]"
-               class="center-fit"
-               @click="ref_on = !ref_on"/>
+          <div class="img center-div">
+            <img :src="camera_src(num)" :class="cam_class[num]" class="center-fit" @click="swap_ref_shot()" />
+            <div class="overimg">
+              <div class="img-menu">
+                <button class="btn btn-primary-outline float-right"
+                        @click="$set(show_menu, num, !show_menu[num])">
+                  <span class="oi oi-menu"> {{cam_title(num)}}</span>
+                </button>
+                <div v-if="if_show_menu(num)">
+                  <button class="btn btn-primary-outline float-right"
+                          @click="copy_url(num)">
+                    <span class="oi oi-clipboard"></span>Copy
+                  </button>
+                  <button class="btn btn-primary-outline float-right"
+                          @click="refresh_img(num)">
+                    <span class="oi oi-reload"></span>
+                  </button>
+                  <button class="btn btn-primary-outline float-right"
+                          @click="swap_ref_shot(num)">
+                    <span class="oi oi-loop"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  <script>
-    var cam_map = {
-      1:'1_jardin',
-      2:'2_garaje',
-      3:'3_living',
-      4:'4_comedor',
-      and:'android',
-    }
+    <script>
 
-    var cameras = new Vue({
-      el: '#Cameras',
-      data: {
-        ref_on: false,
-        first_run: '',
-        cache_time: new Date().getTime(),
-        cam_map: cam_map,
-        selected: null,
-        cam_class: {and:'rotate180',
-                  },
-        s3_key: null,
-      },
-      methods:{
-        camera_src(num, name){
-          if(!this.s3_key)
-            return ''
-          if(this.ref_on)
-            return 'https://a.jduo.de/i/'+this.s3_key+'/'+name+'_ref.jpg?' + this.cache_time
-          return 'https://a.jduo.de/i/'+this.s3_key+'/'+name+'.jpg?' + this.cache_time
-        },
-        if_show_camera(num){
-          return this.selected == num || !this.selected
-        },
-        button_class(num){
-          if(this.selected == num)
-            return 'btn-primary'
-          return 'btn-outline-primary'
-        },
-      },
-      created(){
-        this.s3_key = location.hash.substring(1)
-        history.pushState("", document.title, window.location.pathname + window.location.search)
-      },
-    })
-  </script>
+function copyTextToClipboard(text) {
+  if (!navigator.clipboard) {
+    console.log('Old browser')
+    return
+  }
+  navigator.clipboard.writeText(text).then(function() {
+    console.log('Async: Copying to clipboard was successful!')
+  }, function(err) {
+    console.error('Async: Could not copy text: ', err)
+  })
+}
 
-</body>
+var cam_map = {
+  1:'1_jardin',
+  2:'2_garaje',
+  3:'3_living',
+  4:'4_comedor',
+  and:'android',
+}
+
+var cameras = new Vue({
+  el: '#Cameras',
+  data: {
+    ref_on: false,
+    first_run: '',
+    cache_time: '',
+    cam_map: cam_map,
+    selected: null,
+    cam_class: {and:'rotate180',
+               },
+    s3_key: '',
+    show_menu: {},
+  },
+  methods:{
+    cam_title(num){
+      if(this.ref_on)
+        return 'Ref'
+      return 'Shot'
+    },
+    select_camera(num){
+      if(this.selected == num)
+        this.selected = null
+      else
+        this.selected = num
+    },
+    copy_client_url(){
+      copyTextToClipboard('https://a.jduo.de/w#' + this.s3_key)
+    },
+    copy_url(num){
+      copyTextToClipboard(this.camera_src(num, true))
+    },
+    camera_src(num, no_cache_prefix){
+      if(!this.s3_key)
+        return ''
+      let prefix = '?' + this.cache_time
+      if(no_cache_prefix)
+        prefix = ''
+      if(this.ref_on)
+        return 'https://a.jduo.de/i/'+this.s3_key+'/'+this.cam_map[num]+'_ref.jpg' + prefix
+      return 'https://a.jduo.de/i/'+this.s3_key+'/'+this.cam_map[num]+'.jpg' + prefix
+    },
+    refresh_img(num){
+      this.cache_time = new Date().getTime()
+    },
+    swap_ref_shot(num){
+      this.ref_on = !this.ref_on
+    },
+    if_show_camera(num){
+      return this.selected == num || !this.selected
+    },
+    if_show_menu(num){
+      return this.show_menu[num]
+    },
+    button_class(num){
+      if(this.selected == num)
+        return 'btn-primary'
+      return 'btn-outline-primary'
+    },
+  },
+  created(){
+    this.refresh_img()
+    this.s3_key = location.hash.substring(1)
+    //history.pushState("", document.title, window.location.pathname + window.location.search)
+  },
+})
+    </script>
+  </body>
 </html>

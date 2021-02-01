@@ -5,7 +5,7 @@ ACTION="$2"
 
 if [[ $INCOMING_IP == "" ]]; then
   echo "Usage:
-  salarm_open_port <incoming ip|any>
+  salarm_open_port <incoming ip|any> <open|close|status>
   
   Allow SSH access to the server machine.
   "

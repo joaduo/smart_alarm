@@ -250,32 +250,21 @@ async def do_shots(msg, args, reply, prefix=''):
         task = android_shot_cmd.as_task(cameras, upload=True, prefix=prefix)
         newtasks = [t for _,t in tasks] + [task]
         results = await asyncio.gather(*newtasks)
-    urls = []
-    errors = []
+    text = build_client_url() +'\n'
     for i,e in list(zip([i for i,_ in tasks], results)):
         if e:
-            errors.append(f'{i}:{e}')
+            text += f'{i}:{e[:10]}\n'
         else:
-            urls.append(build_https_img_path(i))
-    urls += results[-1]['urls']
-    errors += results[-1]['errors']
-    text = build_shot_reply(dict(urls=urls, errors=errors))
-    text += '\n' +  build_client_url()
+            text += f'{i}:ok\n'
+    if results[-1]['errors']:
+        text += f'and:{str(results[-1]["errors"])[:10]}\n'
+    else:
+        text += 'and:ok\n'
     reply(msg, text)
 
 
 def build_client_url():
     return f'https://{settings.s3_bucket}/w#{settings.web_auth_token}'
-
-
-def build_shot_reply(imgs):
-    text = ''
-    for url in imgs['urls']:
-        text += f'{url}\n'
-    for error in imgs['errors']:
-        text += f'err:{error[:50]}\n'
-        logging.error(error)
-    return text
 
 
 def config_report(names=True):

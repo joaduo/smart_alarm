@@ -100,8 +100,7 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
                 errors.append(out + err)
         else:
             errors.append('Could not take picture')
-    return dict(urls=[build_https_img_path(i) for i in imgs],
-                errors=['Android:'+e for e in errors])
+    return dict(imgs=imgs, errors=errors)
 
 
 def gather_ipcam_shots(cameras=None, upload=False, prefix=''):
@@ -114,7 +113,7 @@ def gather_ipcam_shots(cameras=None, upload=False, prefix=''):
         or name[0] in selected):
             i = f'{num}_{name}{prefix}.jpg'
             t = ipcam_shot.as_task(ip, i, upload)
-            tasks.append((i, t))
+            tasks.append((num, t))
     return tasks
 
 
