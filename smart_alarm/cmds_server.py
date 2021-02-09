@@ -223,6 +223,7 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     args = cmd.split(maxsplit=1)
     args = args[1].strip() if len(args) > 1 else None
     match = lambda exp: cmd.upper() == exp
+    startswith = lambda exp: cmd.upper().startswith(exp)
     if match('STATUS'):
         text = f'Notified:{from_phone in settings.notified_users}\n'
         text += network_status_report() + '\n'
@@ -237,17 +238,26 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     elif match('SIREN'):
         settings.siren_on = not settings.siren_on
         reply(msg, f'Siren {"ON" if settings.siren_on else "OFF"}')
-    elif cmd.upper().startswith('HD'):
+    elif startswith('HD'):
         if not args or args and args.upper() == 'ON':
             settings.ipcam_stream_path_current = settings.ipcam_stream_path_hd
             reply(msg, 'HD on')
         else:
             settings.ipcam_stream_path_current = settings.ipcam_stream_path_sub
             reply(msg, 'HD off')
-    elif cmd.upper().startswith('SH'):
+    elif startswith('SH'):
         await do_shots(msg, args, reply)
-    elif cmd.upper().startswith('REF'):
+    elif startswith('REF'):
         await do_shots(msg, args, reply, prefix='_ref')
+    elif startswith('ALARM') or startswith('FIRE'):
+        timeout = settings.siren_timeout_sec
+        if args:
+            try:
+                timeout = int(args)
+            except ValueError:
+                pass
+        siren.trigger_alarm(timeout, force=True)
+        reply(msg, f'Triggered for {timeout} secs')
     elif match('HELP') or not is_admin:
         # Print help if we can't match any user command
         if is_admin:

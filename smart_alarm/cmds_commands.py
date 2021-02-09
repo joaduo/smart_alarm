@@ -286,22 +286,14 @@ class SirenRelay:
         self.pin = settings.siren_pin_number if pin is None else pin
         self.relay = gpiozero.OutputDevice(self.pin, active_high=False, initial_value=False)
 
-    def set_relay(self, status):
-        if status and solve_settings().siren_on:
-            logger.info("Setting relay: ON")
-            self.relay.on()
-        else:
-            logger.info("Setting relay: OFF")
-            self.relay.off()
-
-    def trigger_alarm(self, timeout:int=125):
-        if not solve_settings().siren_on:
+    def trigger_alarm(self, timeout:int=125, force=False):
+        if not force and not solve_settings().siren_on:
             return False
         assert timeout, 'Please provide a timeout'
-        self.set_relay(True)
+        self.relay.on()
         def turn_off():
             time.sleep(timeout)
-            self.set_relay(False)
+            self.relay.off()
         threading.Thread(target=turn_off).start()
         return True
 
