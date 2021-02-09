@@ -11,8 +11,9 @@ import logging
 from signal import pause
 
 from gpiozero import MotionSensor
+from smart_alarm.solve_settings import solve_settings
 
-logger = logging.getLogger('mail_server')
+logger = logging.getLogger('pir_server')
 
 
 CMDS_SERVER = os.environ.get('CMDS_SERVER', '127.0.0.1')
@@ -22,7 +23,7 @@ CMDS_AUTH_TOKEN= os.environ.get('CMDS_AUTH_TOKEN')
 
 def setup_and_run():
     # Raspberry Pi GPIO pin config
-    sensor = MotionSensor(14)
+    sensor = MotionSensor(solve_settings().pir_pin_number)
     def send_notification():
         url = f'http://{CMDS_SERVER}:{CMDS_SERVER_PORT}/alarm/notification/' 
         json = {'msg_from':'smart_alarm.pir_server',

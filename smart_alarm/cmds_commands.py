@@ -8,11 +8,13 @@ import requests
 import subprocess
 import logging
 import random
+import threading
 import time
 from urllib.parse import urlparse
 
 import boto3
 from botocore.exceptions import ClientError
+import gpiozero
 
 from contextlib import contextmanager
 from smart_alarm.solve_settings import solve_settings
@@ -20,6 +22,7 @@ from smart_alarm.cmds_server_base import AndroidRPC
 import os
 import re
 from smart_alarm.utils import async_thread
+
 
 logger = logging.getLogger('cmds_commands')
 settings = solve_settings()
@@ -276,4 +279,29 @@ def clean_ufw_status(out):
         l = re.sub('#\s.*$', '', l).strip()
         newout.append(l)
     return '\n'.join(newout)
+
+
+class SirenRelay:
+    def __init__(self, pin=None):
+        self.pin = settings.siren_pin_number if pin is None else pin
+        self.relay = gpiozero.OutputDevice(self.pin, active_high=False, initial_value=False)
+
+    def set_relay(self, status):
+        if status and solve_settings().siren_on:
+            logger.info("Setting relay: ON")
+            self.relay.on()
+        else:
+            logger.info("Setting relay: OFF")
+            self.relay.off()
+
+    def trigger_alarm(self, timeout:int=125):
+        if not solve_settings().siren_on:
+            return False
+        assert timeout, 'Please provide a timeout'
+        self.set_relay(True)
+        def turn_off():
+            time.sleep(timeout)
+            self.set_relay(False)
+        threading.Thread(target=turn_off).start()
+        return True
 

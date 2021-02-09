@@ -8,11 +8,12 @@ import logging
 import os
 from typing import Optional
 import json
-from collections import defaultdict
 import time
 import secrets
 import asyncio
 import re
+from collections import defaultdict
+from datetime import datetime
 
 from pydantic import BaseModel
 import uvicorn
@@ -23,11 +24,12 @@ from smart_alarm.cmds_server_base import User, get_current_active_user, app,\
     AndroidRPC
 from smart_alarm.cmds_commands import network_status_report, reboot_android,\
     tempature_report, gather_ipcam_shots, android_shot_cmd, delete_previous_s3_files,\
-    smart_split, manage_ssh, clean_ufw_status, build_https_img_path
+    smart_split, manage_ssh, clean_ufw_status, SirenRelay
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
 from smart_alarm.utils import async_thread
+
 
 logger = logging.getLogger('cmds_server')
 
@@ -105,8 +107,8 @@ RM n|p
 ADDADMIN n|p
 RMADMIN n|p
 CONFIG|CFG [N]umbers
-SSHO|C [Ip]
-KILL|K A|C|M
+SSHO|C [any|Ip]
+K|KILL A|C|M
 BOOT A
 '''
 async def process_cmd(msg, reply=None):
@@ -219,7 +221,6 @@ def admin_cmds(cmd, from_phone, msg, reply):
 async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     cmd = cmd.strip()
     args = cmd.split(maxsplit=1)
-    cmd = args[0]
     args = args[1].strip() if len(args) > 1 else None
     match = lambda exp: cmd.upper() == exp
     if match('STATUS'):
@@ -233,7 +234,10 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     elif match('OFF'):
         settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
-    elif match('HD'):
+    elif match('SIREN'):
+        settings.siren_on = not settings.siren_on
+        reply(msg, f'Siren {"ON" if settings.siren_on else "OFF"}')
+    elif cmd.upper().startswith('HD'):
         if not args or args and args.upper() == 'ON':
             settings.ipcam_stream_path_current = settings.ipcam_stream_path_hd
             reply(msg, 'HD on')
@@ -253,6 +257,11 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
 
 
 async def do_shots(msg, cameras, reply, prefix=''):
+    text = await _do_shots(cameras, prefix)
+    reply(msg, text)
+
+
+async def _do_shots(cameras=None, prefix=''):
     with async_thread.thread_pool(5):
         tasks = gather_ipcam_shots(cameras, upload=True, prefix=prefix, stream_path=settings.ipcam_stream_path_current)
         task = android_shot_cmd.as_task(cameras, upload=True, prefix=prefix)
@@ -268,7 +277,7 @@ async def do_shots(msg, cameras, reply, prefix=''):
         text += f'and:{str(results[-1]["errors"])[:10]}\n'
     elif results[-1]['imgs']:
         text += 'and:ok\n'
-    reply(msg, text)
+    return text
 
 
 def build_client_url():
@@ -279,7 +288,8 @@ def config_report(names=True):
     admin = phones_to_str(settings.admins, names)
     user = phones_to_str(settings.users, names)
     notify = phones_to_str(settings.notified_users, names)
-    return f'Admins:{admin}\nUser:{user}\nNotify:{notify}\nHD:{int(settings.ipcam_stream_path_current == settings.ipcam_stream_path_hd)}'
+    return (f'Admins:{admin}\nUser:{user}\nNotify:{notify}\nHD:{int(settings.ipcam_stream_path_current == settings.ipcam_stream_path_hd)}\n'
+            f'Siren:{settings.siren_on}')
 
 
 class FakeSMS(BaseModel):
@@ -306,7 +316,9 @@ class Notification(BaseModel):
     auth_token: str
 
 
+latest_pir = None
 notifications_recv = []
+siren = SirenRelay()
 @app.post("/alarm/notification/")
 async def alarm_notification(notification: Notification):
     if notification.auth_token != settings.http_server_token:
@@ -314,24 +326,36 @@ async def alarm_notification(notification: Notification):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect request token",
         )
+    notification.auth_token = None
     results = []
     errors = []
-    notifications_recv.append(notification)
+    now = datetime.utcnow()
+    msg = notification.msg
+    triggered = False
+    global latest_pir
+    if (notification.msg_type == 'PIR'
+        and (not latest_pir
+             or (now - latest_pir).total_seconds() > settings.siren_timeout_sec)):
+        latest_pir = now
+        # Give it a 2 seconds gap to wait for an new event
+        triggered = siren.trigger_alarm(timeout=settings.siren_timeout_sec + 2)
+        msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
+        msg += await _do_shots()
+    notifications_recv.append((notification, now, triggered))
     for p in settings.notified_users:
-        r = AndroidRPC().sms_send(p, notification.msg)
+        r = AndroidRPC().sms_send(p, msg)
         if r.get('error'):
             errors.append(r)
         else:
             results.append(r)
         if 'This is a test mail send by your NVR' in notification:
             break
-    notification.auth_token = None
     return dict(result=results, error=errors)
 
 
 @app.get("/alarm/notifications/")
 async def alarm_notifications(current_user: User = Depends(get_current_active_user)):
-    return dict(notifications=[m.msg for m in notifications_recv],
+    return dict(notifications=[f'{m.msg}:{ts}:{trg}' for m,ts,trg in notifications_recv],
                 sms=[m['body'] for m in sms_rcv['msgs']])
 
 

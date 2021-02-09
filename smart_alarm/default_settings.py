@@ -176,21 +176,10 @@ class DefaultSettings(BaseSettings):
         default='/sdcard/Download/',
         env_var='ANDROID_SHOT_DIR')
 
-#     s3_images_path = ConfigVar(
-#         doc=('S3 path like s3://my.domian/folder/images/'),
-#         default='',
-#         mandatory=True,
-#         env_var='ALARM_S3_IMAGES_PATH')
-
     s3_bucket = ConfigVar(
         doc='',
         default='',
         env_var='ALARM_S3_BUCKET')
-
-#     web_client_url = ConfigVar(
-#         doc='',
-#         default='https://example/myalarm/',
-#         env_var='ALARM_WEB_CLIENT_URL')
 
     web_auth_token = ConfigVar(
         doc=('Unless set, it will be automatically set at startup.'
@@ -202,6 +191,26 @@ class DefaultSettings(BaseSettings):
         doc='Web Auth token size in bytes.',
         default=8,
         env_var='ALARM_WEB_AUTH_TOKEN_SIZE')
+
+    siren_on = ConfigVar(
+        doc='Fire alarm on event',
+        default=False,
+        env_var='ALARM_SIREN_ON')
+
+    siren_timeout_sec = ConfigVar(
+        doc='Siren timeout per event in seconds',
+        default=120,
+        env_var='ALARM_SIREN_TIMEOUT_SEC')
+
+    siren_pin_number = ConfigVar(
+        doc='Siren Relay Pin Number',
+        default=17,
+        env_var='ALARM_SIREN_PIN_NUMBER')
+
+    pir_pin_number = ConfigVar(
+        doc='PIR Pin Number',
+        default=14,
+        env_var='ALARM_PIR_PIN_NUMBER')
 
 
 # Soon to be deprecated

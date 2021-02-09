@@ -9,4 +9,8 @@ if [[ -e $conf_file ]];then
   source $conf_file
 fi
 
+if [[ $PIR_SERVER_DELAY_SEC != "" ]]; then
+  sleep $PIR_SERVER_DELAY_SEC
+fi
+
 python3 -m smart_alarm.pir_server
