@@ -212,6 +212,11 @@ class DefaultSettings(BaseSettings):
         default=14,
         env_var='ALARM_PIR_PIN_NUMBER')
 
+    shot_on_motion = ConfigVar(
+        doc='Automatic Shot when motion is detected',
+        default=False,
+        env_var='ALARM_SHOT_ON_MOTION')
+
 
 # Soon to be deprecated
 Settings = DefaultSettings

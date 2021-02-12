@@ -22,6 +22,7 @@ from smart_alarm.cmds_server_base import AndroidRPC
 import os
 import re
 from smart_alarm.utils import async_thread
+from datetime import datetime
 
 
 logger = logging.getLogger('cmds_commands')
@@ -285,15 +286,19 @@ class SirenRelay:
     def __init__(self, pin=None):
         self.pin = settings.siren_pin_number if pin is None else pin
         self.relay = gpiozero.OutputDevice(self.pin, active_high=False, initial_value=False)
+        self.latest_trigger = None
 
     def trigger_alarm(self, timeout:int=125, force=False):
         if not force and not solve_settings().siren_on:
             return False
         assert timeout, 'Please provide a timeout'
+        now = datetime.utcnow()
+        self.latest_trigger = now
         self.relay.on()
         def turn_off():
             time.sleep(timeout)
-            self.relay.off()
+            if self.latest_trigger == now:
+                self.relay.off()
         threading.Thread(target=turn_off).start()
         return True
 

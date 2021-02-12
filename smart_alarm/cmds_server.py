@@ -97,7 +97,10 @@ ON
 OFF
 STATUS
 SHOT c,c
-REF c,c'''
+AUTOSHOT On|Off
+REF c,c
+SIREN
+ALARM|FIRE <sec>'''
 ADMIN_HELP='''
 ON n|p
 OFF n|p
@@ -235,8 +238,16 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     elif match('OFF'):
         settings.notified_users.remove(from_phone)
         reply(msg, 'Notifications OFF')
-    elif match('SIREN'):
-        settings.siren_on = not settings.siren_on
+    elif startswith('SIREN'):
+        flag = not settings.siren_on
+        if args:
+            if args.lower().startswith('on'):
+                flag = True
+            else:
+                flag = False
+        settings.siren_on = flag
+        if not flag:
+            siren.relay.off()
         reply(msg, f'Siren {"ON" if settings.siren_on else "OFF"}')
     elif startswith('HD'):
         if not args or args and args.upper() == 'ON':
@@ -245,6 +256,15 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
         else:
             settings.ipcam_stream_path_current = settings.ipcam_stream_path_sub
             reply(msg, 'HD off')
+    elif startswith('AUTOSH'):
+        flag = not settings.shot_on_motion
+        if args:
+            if args.lower().startswith('on'):
+                flag = True
+            else:
+                flag = False
+        settings.shot_on_motion = flag
+        reply(msg, f'Autoshot {"ON" if settings.shot_on_motion else "OFF"}')
     elif startswith('SH'):
         await do_shots(msg, args, reply)
     elif startswith('REF'):
@@ -299,7 +319,7 @@ def config_report(names=True):
     user = phones_to_str(settings.users, names)
     notify = phones_to_str(settings.notified_users, names)
     return (f'Admins:{admin}\nUser:{user}\nNotify:{notify}\nHD:{int(settings.ipcam_stream_path_current == settings.ipcam_stream_path_hd)}\n'
-            f'Siren:{settings.siren_on}')
+            f'Siren:{int(settings.siren_on)}\nAutoshot:{int(settings.shot_on_motion)}')
 
 
 class FakeSMS(BaseModel):
@@ -343,14 +363,17 @@ async def alarm_notification(notification: Notification):
     msg = notification.msg
     triggered = False
     global latest_pir
-    if (notification.msg_type == 'PIR'
-        and (not latest_pir
-             or (now - latest_pir).total_seconds() > settings.siren_timeout_sec)):
-        latest_pir = now
-        # Give it a 2 seconds gap to wait for an new event
-        triggered = siren.trigger_alarm(timeout=settings.siren_timeout_sec + 2)
-        msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
-        msg += await _do_shots()
+    if settings.shot_on_motion:
+        if (notification.msg_type == 'PIR'
+            and (not latest_pir
+                 or (now - latest_pir).total_seconds() > settings.siren_timeout_sec)):
+            latest_pir = now
+            # Give it a 2 seconds gap to wait for an new event
+            triggered = siren.trigger_alarm(timeout=settings.siren_timeout_sec + 2)
+            msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
+            msg += await _do_shots()
+        elif notification.msg_type != 'PIR':
+            msg += await _do_shots()
     notifications_recv.append((notification, now, triggered))
     for p in settings.notified_users:
         r = AndroidRPC().sms_send(p, msg)
