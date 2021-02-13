@@ -24,7 +24,7 @@ from smart_alarm.cmds_server_base import User, get_current_active_user, app,\
     AndroidRPC
 from smart_alarm.cmds_commands import network_status_report, reboot_android,\
     tempature_report, gather_ipcam_shots, android_shot_cmd, delete_previous_s3_files,\
-    smart_split, manage_ssh, clean_ufw_status, SirenRelay
+    smart_split, manage_ssh, clean_ufw_status,siren, light
 from smart_alarm.solve_settings import solve_settings
 from smart_alarm.phone_numbers import phones_to_str, split_phones,\
     normalize_phone, is_phone
@@ -118,6 +118,7 @@ BOOT A
 AUTOSHOT On|Off
 SIREN On|Off
 HD On|Off
+LIGHT [secs]
 '''
 async def process_cmd(msg, reply=None):
     # msg = {'read': '0', 'body': 'Tes',     '_id': '4', 'date': '1610213710004', 'address': '+1...'}
@@ -279,6 +280,15 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
         await do_shots(msg, args, reply)
     elif startswith('REF'):
         await do_shots(msg, args, reply, prefix='_ref')
+    elif startswith('LI'):
+        timeout = 2
+        if args:
+            try:
+                timeout = int(args)
+            except ValueError:
+                pass
+        light.turn_on(timeout)
+        reply(msg, f'Triggered for {timeout} secs')
     elif startswith('PANIC') or startswith('ALARM') or startswith('FIRE'):
         timeout = settings.siren_timeout_sec
         if args:
@@ -286,7 +296,7 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
                 timeout = int(args)
             except ValueError:
                 pass
-        siren.trigger_alarm(timeout, force=True)
+        siren.trigger_siren(timeout, force=True)
         reply(msg, f'Triggered for {timeout} secs')
     elif match('HELP') or not is_admin:
         # Print help if we can't match any user command
@@ -358,7 +368,6 @@ class Notification(BaseModel):
 
 latest_shots = None
 notifications_recv = []
-siren = SirenRelay()
 @app.post("/alarm/notification/")
 async def alarm_notification(notification: Notification):
     if notification.auth_token != settings.http_server_token:
@@ -379,7 +388,7 @@ async def alarm_notification(notification: Notification):
         latest_shots = now
         if notification.msg_type == 'PIR':
             # Give it a 2 seconds gap to wait for a new event
-            triggered = siren.trigger_alarm(timeout=settings.siren_timeout_sec + 2)
+            triggered = siren.trigger_siren(timeout=settings.siren_timeout_sec + 2)
         msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
         msg += await _do_shots()
     notifications_recv.append((notification, now, triggered))

@@ -217,6 +217,10 @@ class DefaultSettings(BaseSettings):
         default=False,
         env_var='ALARM_SHOT_ON_MOTION')
 
+    light_pin_number = ConfigVar(
+        doc='Light Relay Pin Number',
+        default=27,
+        env_var='ALARM_LIGHT_PIN_NUMBER')
 
 # Soon to be deprecated
 Settings = DefaultSettings

@@ -85,7 +85,8 @@ def android_shot_cmd(cameras, upload=False, prefix='', auto_focus=True):
     if not selected or set(['a','and','andr']) & selected:
         basename = f'android{prefix}.jpg'
         path = os.path.join(settings.android_shot_dir, basename)
-        resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
+        with light.context():
+            resp = AndroidRPC().cameraCapturePicture(path,useAutoFocus=auto_focus)
         #{'result': {'rpc_result': {'error': None, 'id': 1, 'result': {'takePicture': True, 'autoFocus': False}}}}
         result = resp['result']['rpc_result']['result']
         if result['takePicture']:
@@ -288,7 +289,7 @@ class SirenRelay:
         self.relay = gpiozero.OutputDevice(self.pin, active_high=False, initial_value=False)
         self.latest_trigger = None
 
-    def trigger_alarm(self, timeout:int=125, force=False):
+    def trigger_siren(self, timeout:int=125, force:bool=False):
         if not force and not solve_settings().siren_on:
             return False
         assert timeout, 'Please provide a timeout'
@@ -302,3 +303,32 @@ class SirenRelay:
         threading.Thread(target=turn_off).start()
         return True
 
+
+class LightRelay:
+    def __init__(self, pin=None):
+        self.pin = settings.light_pin_number if pin is None else pin
+        self.relay = gpiozero.OutputDevice(self.pin, active_high=False, initial_value=False)
+        self.latest_trigger = None
+
+    @contextmanager
+    def context(self):
+        self.relay.on()
+        try:
+            yield self
+        finally:
+            self.relay.off()
+
+    def turn_on(self, timeout:int=125):
+        assert timeout, 'Please provide a timeout'
+        now = datetime.utcnow()
+        self.latest_trigger = now
+        self.relay.on()
+        def turn_off():
+            time.sleep(timeout)
+            if self.latest_trigger == now:
+                self.relay.off()
+        threading.Thread(target=turn_off).start()
+        return True
+
+siren = SirenRelay()
+light = LightRelay()
