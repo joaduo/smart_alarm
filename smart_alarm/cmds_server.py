@@ -92,15 +92,16 @@ async def periodic_status_check():
 
 
 USER_HELP='''
-HELP
 ON
 OFF
-STATUS
+PANIC [secs]
+
 SHOT c,c
-AUTOSHOT On|Off
 REF c,c
-SIREN On|Off
-ALARM|FIRE secs'''
+
+HELP
+STATUS
+'''
 ADMIN_HELP='''
 ON n|p
 OFF n|p
@@ -109,10 +110,13 @@ ADDN n p
 RM n|p
 ADDADMIN n|p
 RMADMIN n|p
-CONFIG|CFG [N]umbers
+PW
+CFG [N]
 SSHO|C [any|Ip]
-K|KILL A|C
+KILL A|C
 BOOT A
+AUTOSHOT On|Off
+SIREN On|Off
 '''
 async def process_cmd(msg, reply=None):
     # msg = {'read': '0', 'body': 'Tes',     '_id': '4', 'date': '1610213710004', 'address': '+1...'}
@@ -186,7 +190,7 @@ def admin_cmds(cmd, from_phone, msg, reply):
     elif match('CFG') or match('CONFIG'):
         as_numbers = len(args) > 1
         reply(msg, config_report(names=not as_numbers))
-    elif match('KILL ') or match('K '):
+    elif match('KILL '):
         server = args[1][0].upper()
         if server == 'A':
             r = AndroidRPC().kill_android_server()
@@ -234,10 +238,14 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
         reply(msg, text)
     elif match('ON'):
         settings.notified_users.add(from_phone)
-        reply(msg, 'Notifications ON')
+        settings.shot_on_motion = True
+        settings.siren_on = True
+        reply(msg, 'Alarm ON')
     elif match('OFF'):
         settings.notified_users.remove(from_phone)
-        reply(msg, 'Notifications OFF')
+        settings.shot_on_motion = False
+        settings.siren_on = False
+        reply(msg, 'Alarm OFF')
     elif startswith('SIREN'):
         flag = not settings.siren_on
         if args:
@@ -269,7 +277,7 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
         await do_shots(msg, args, reply)
     elif startswith('REF'):
         await do_shots(msg, args, reply, prefix='_ref')
-    elif startswith('ALARM') or startswith('FIRE'):
+    elif startswith('PANIC') or startswith('ALARM') or startswith('FIRE'):
         timeout = settings.siren_timeout_sec
         if args:
             try:
@@ -281,7 +289,7 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
     elif match('HELP') or not is_admin:
         # Print help if we can't match any user command
         if is_admin:
-            reply(msg, USER_HELP + ADMIN_HELP)
+            reply(msg, USER_HELP.replace('\nON\nOFF\n', '') + ADMIN_HELP)
         else:
             reply(msg, USER_HELP)
 
@@ -346,7 +354,7 @@ class Notification(BaseModel):
     auth_token: str
 
 
-latest_pir = None
+latest_shots = None
 notifications_recv = []
 siren = SirenRelay()
 @app.post("/alarm/notification/")
@@ -362,18 +370,16 @@ async def alarm_notification(notification: Notification):
     now = datetime.utcnow()
     msg = notification.msg
     triggered = False
-    global latest_pir
-    if settings.shot_on_motion:
-        if (notification.msg_type == 'PIR'
-            and (not latest_pir
-                 or (now - latest_pir).total_seconds() > settings.siren_timeout_sec)):
-            latest_pir = now
+    global latest_shots
+    if (settings.shot_on_motion
+        and (not latest_shots
+             or (now - latest_shots).total_seconds() > settings.siren_timeout_sec)):
+        latest_shots = now
+        if notification.msg_type == 'PIR':
             # Give it a 2 seconds gap to wait for an new event
             triggered = siren.trigger_alarm(timeout=settings.siren_timeout_sec + 2)
-            msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
-            msg += await _do_shots()
-        elif notification.msg_type != 'PIR':
-            msg += await _do_shots()
+        msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
+        msg += await _do_shots()
     notifications_recv.append((notification, now, triggered))
     for p in settings.notified_users:
         r = AndroidRPC().sms_send(p, msg)
