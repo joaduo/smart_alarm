@@ -99,8 +99,8 @@ STATUS
 SHOT c,c
 AUTOSHOT On|Off
 REF c,c
-SIREN
-ALARM|FIRE <sec>'''
+SIREN On|Off
+ALARM|FIRE secs'''
 ADMIN_HELP='''
 ON n|p
 OFF n|p
@@ -111,7 +111,7 @@ ADDADMIN n|p
 RMADMIN n|p
 CONFIG|CFG [N]umbers
 SSHO|C [any|Ip]
-K|KILL A|C|M
+K|KILL A|C
 BOOT A
 '''
 async def process_cmd(msg, reply=None):
