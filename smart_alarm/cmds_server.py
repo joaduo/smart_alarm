@@ -117,6 +117,7 @@ KILL A|C
 BOOT A
 AUTOSHOT On|Off
 SIREN On|Off
+HD On|Off
 '''
 async def process_cmd(msg, reply=None):
     # msg = {'read': '0', 'body': 'Tes',     '_id': '4', 'date': '1610213710004', 'address': '+1...'}
@@ -245,6 +246,7 @@ async def user_cmds(cmd, from_phone, msg, is_admin, reply):
         settings.notified_users.remove(from_phone)
         settings.shot_on_motion = False
         settings.siren_on = False
+        siren.relay.off()
         reply(msg, 'Alarm OFF')
     elif startswith('SIREN'):
         flag = not settings.siren_on
@@ -376,7 +378,7 @@ async def alarm_notification(notification: Notification):
              or (now - latest_shots).total_seconds() > settings.siren_timeout_sec)):
         latest_shots = now
         if notification.msg_type == 'PIR':
-            # Give it a 2 seconds gap to wait for an new event
+            # Give it a 2 seconds gap to wait for a new event
             triggered = siren.trigger_alarm(timeout=settings.siren_timeout_sec + 2)
         msg += f'\nSiren: {"Triggered" if triggered else "Off"}\n'
         msg += await _do_shots()
